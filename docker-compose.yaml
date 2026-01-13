@@ -1,0 +1,93 @@
+name: zksync-prividium
+
+include:
+  - docker-compose-deps.yaml
+
+services:
+  admin-panel:
+    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.98.1
+    platform: linux/amd64
+    restart: unless-stopped
+    environment:
+      - VITE_PERMISSIONS_API_URL=http://localhost:8000
+      - VITE_USER_PANEL_URL=http://localhost:3001
+      - PORT=3000
+    depends_on:
+      - permissions-api
+      - user-panel
+    ports:
+      - '3000:3000'
+
+  permissions-api:
+    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.98.1
+    platform: linux/amd64
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    ports:
+      - '8000:8000'
+      - '9091:9091'
+    environment:
+      - PORT=8000
+      - METRICS_PORT=9091
+      - SEQUENCER_RPC_URL=http://zksyncos:3050
+      - CORS_ORIGIN=http://localhost:3000,http://localhost:3001,http://localhost:3002
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/permissions_api
+      - AUTH_METHODS=oidc,crypto_native
+      - NODE_ENV=production
+      - SIWE_CHAIN_ID=6565
+      - SIWE_VALID_DOMAINS=localhost:3000,localhost:3001
+      - OIDC_JWKS_URI=http://keycloak:8080/realms/prividium/protocol/openid-connect/certs
+      - OIDC_JWT_AUD=prividium-client
+      - OIDC_JWT_ISSUER=http://localhost:5080/realms/prividium
+      - OIDC_ADMIN_SUBS=00000000-0000-0000-0000-000000000001
+      - CORS_CACHE_DURATION_MS=600000
+      - ADMIN_PANEL_REDIRECT_URLS=http://localhost:3000/callback
+      - BLOCK_EXPLORER_REDIRECT_URLS=http://localhost:3010/auth/callback
+
+  proxy:
+    image: quay.io/matterlabs_enterprise/prividium-proxy:v1.98.1
+    platform: linux/amd64
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - permissions-api
+      - zksyncos
+    ports:
+      - '8001:8001'
+      - '9092:9091'
+    environment:
+      - NODE_ENV=production
+      - PORT=8001
+      - METRICS_PORT=9091
+      - SEQUENCER_RPC_URL=http://zksyncos:3050
+      - CORS_ORIGIN=*
+      - PERMISSIONS_API_URL=http://permissions-api:8000
+      - WALLETS_API_ENABLED=true
+
+  user-panel:
+    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.98.1
+    platform: linux/amd64
+    restart: unless-stopped
+    environment:
+      - VITE_OIDC_AUTHORITY=http://localhost:5080/realms/prividium
+      - VITE_OIDC_CLIENT_ID=prividium-client
+      - VITE_OIDC_REDIRECT_URI=http://localhost:3001/callback
+      - VITE_OIDC_POST_LOGOUT_REDIRECT_URI=http://localhost:3001/login
+      - VITE_OIDC_BUTTON_TEXT=Sign in with Keycloak
+      - VITE_PROXY_URL=http://localhost:8001
+      - VITE_ADMIN_PANEL_REDIRECT_URI=http://localhost:3000/callback
+      - VITE_AUTH_METHODS=oidc,crypto_native
+      - VITE_CHAIN_ID=6565
+      - VITE_CHAIN_NAME=Prividium™ Local
+      - VITE_WALLETS_ENABLED=true
+      - VITE_PERMISSIONS_API_URL=http://localhost:8000
+      - VITE_L1_RPC_URL=http://l1:5010
+      - VITE_L1_CHAIN_ID=31337
+      - VITE_L1_CHAIN_NAME=L1 Anvil
+      - PORT=3000
+    depends_on:
+      - proxy
+      - permissions-api
+    ports:
+      - '3001:3000'
