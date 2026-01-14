@@ -28,10 +28,11 @@ docker compose -f docker-compose.yaml up -d
 
 ### 3. Seed Wallet-Based Users w/ Funds
 
-To add a few wallet-based authenticated users with pre-configured test wallets, run the seed script against the database:
+To add a few wallet-based authenticated users with pre-configured test wallets, run the seed script against the
+database:
 
 ```bash
-docker exec -i zksync-prividium-postgres-1 psql -U postgres -d permissions_api < dev/wallet-auth/seed-wallet-auth.sql
+docker exec -i zksync-prividium-postgres-1 psql -U postgres -d prividium_api < dev/wallet-auth/seed-wallet-auth.sql
 ```
 
 ### 4. Access the Application
@@ -40,21 +41,22 @@ Open the User Panel at **http://localhost:3001**
 
 Click **"Sign in with Keycloak"** and use one of the pre-configured test users:
 
-| Email | Password |
-|-------|----------|
+| Email           | Password |
+|-----------------|----------|
 | admin@local.dev | password |
-| user@local.dev | password |
-| test@local.dev | password |
+| user@local.dev  | password |
+| test@local.dev  | password |
 
 Alternatively, you can login via a MetaMask wallet by clicking **"Sign in with Wallet"**:
 
-| Wallet Address | Private Key |
-|-------|----------|
+| Wallet Address                           | Private Key                                                        |
+|------------------------------------------|--------------------------------------------------------------------|
 | f39Fd6e51aad88F6F4ce6aB8827279cffFb92266 | 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 |
 | 70997970C51812dc3A010C7d01b50e0d17dc79C8 | 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d |
 | 3C44CdDdB6a900fa2b585dd299e03d12FA4293BC | 0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a |
 
 These wallet-based test users all have wallet addresses derived from the standard test mnemonic:
+
 ```
 test test test test test test test test test test test junk
 ```
@@ -75,14 +77,13 @@ The main Prividium™ application services:
 
 - **Admin Panel** - Administrative interface for managing Prividium™
 - **User Panel** - User login for Prividium™
-- **Permissions API** - Backend API for access control and permissions
-- **Proxy** - RPC proxy with permissions enforcement
+- **Prividium API** - API services, including control and permissions and protected rpc.
 
 ### Dependencies (`docker-compose-deps.yaml`)
 
 Supporting infrastructure services:
 
-- **PostgreSQL** - Database for permissions and block explorer
+- **PostgreSQL** - Database for prividium api and block explorer
 - **Keycloak** - Identity provider for OIDC authentication
 - **zkSync OS** - Layer 2 sequencer
 - **L1 (Anvil)** - Local Ethereum testnet and settlement layer
@@ -96,42 +97,40 @@ Supporting infrastructure services:
 
 ### Application
 
-| Service | URL |
-|---------|-----|
-| User Panel | http://localhost:3001 |
-| Admin Panel | http://localhost:3000 |
+| Service        | URL                   |
+|----------------|-----------------------|
+| User Panel     | http://localhost:3001 |
+| Admin Panel    | http://localhost:3000 |
 | Block Explorer | http://localhost:3010 |
 
 ### APIs
 
-| Service | URL |
-|---------|-----|
-| Permissions API | http://localhost:8000 |
-| Proxy (RPC) | http://localhost:8001 |
+| Service            | URL                   |
+|--------------------|-----------------------|
+| Prividium API      | http://localhost:8000 |
 | Block Explorer API | http://localhost:3002 |
 
 ### Blockchain
 
-| Service | URL |
-|---------|-----|
-| zkSync OS RPC | http://localhost:5050 |
+| Service        | URL                   |
+|----------------|-----------------------|
+| zkSync OS RPC  | http://localhost:5050 |
 | L1 (Anvil) RPC | http://localhost:5010 |
 
 ### Infrastructure
 
-| Service | URL | Credentials |
-|---------|-----|-------------|
-| Keycloak Admin | http://localhost:5080 | admin / admin |
-| Grafana | http://localhost:3100 | admin / admin |
-| Prometheus | http://localhost:9090 | - |
-| PostgreSQL | localhost:5432 | postgres / postgres |
+| Service        | URL                   | Credentials         |
+|----------------|-----------------------|---------------------|
+| Keycloak Admin | http://localhost:5080 | admin / admin       |
+| Grafana        | http://localhost:3100 | admin / admin       |
+| Prometheus     | http://localhost:9090 | -                   |
+| PostgreSQL     | localhost:5432        | postgres / postgres |
 
 ### Metrics
 
-| Service | URL |
-|---------|-----|
-| Permissions API Metrics | http://localhost:9091 |
-| Proxy Metrics | http://localhost:9092 |
+| Service               | URL                   |
+|-----------------------|-----------------------|
+| Prividium API Metrics | http://localhost:9091 |
 
 ---
 

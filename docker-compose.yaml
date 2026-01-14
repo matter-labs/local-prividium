@@ -13,12 +13,12 @@ services:
       - VITE_USER_PANEL_URL=http://localhost:3001
       - PORT=3000
     depends_on:
-      - permissions-api
+      - prividium-api
       - user-panel
     ports:
       - '3000:3000'
 
-  permissions-api:
+  prividium-api:
     image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.98.1
     platform: linux/amd64
     restart: unless-stopped
@@ -44,25 +44,6 @@ services:
       - CORS_CACHE_DURATION_MS=600000
       - ADMIN_PANEL_REDIRECT_URLS=http://localhost:3000/callback
       - BLOCK_EXPLORER_REDIRECT_URLS=http://localhost:3010/auth/callback
-
-  proxy:
-    image: quay.io/matterlabs_enterprise/prividium-proxy:v1.98.1
-    platform: linux/amd64
-    restart: unless-stopped
-    depends_on:
-      - postgres
-      - permissions-api
-      - zksyncos
-    ports:
-      - '8001:8001'
-      - '9092:9091'
-    environment:
-      - NODE_ENV=production
-      - PORT=8001
-      - METRICS_PORT=9091
-      - SEQUENCER_RPC_URL=http://zksyncos:3050
-      - CORS_ORIGIN=*
-      - PERMISSIONS_API_URL=http://permissions-api:8000
       - WALLETS_API_ENABLED=true
 
   user-panel:
@@ -75,7 +56,6 @@ services:
       - VITE_OIDC_REDIRECT_URI=http://localhost:3001/callback
       - VITE_OIDC_POST_LOGOUT_REDIRECT_URI=http://localhost:3001/login
       - VITE_OIDC_BUTTON_TEXT=Sign in with Keycloak
-      - VITE_PROXY_URL=http://localhost:8001
       - VITE_ADMIN_PANEL_REDIRECT_URI=http://localhost:3000/callback
       - VITE_AUTH_METHODS=oidc,crypto_native
       - VITE_CHAIN_ID=6565
@@ -87,7 +67,6 @@ services:
       - VITE_L1_CHAIN_NAME=L1 Anvil
       - PORT=3000
     depends_on:
-      - proxy
-      - permissions-api
+      - prividium-api
     ports:
       - '3001:3000'
