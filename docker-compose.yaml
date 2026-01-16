@@ -5,25 +5,27 @@ include:
 
 services:
   admin-panel:
-    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.98.1
+    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.104.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
-      - VITE_PERMISSIONS_API_URL=http://localhost:8000
+      - VITE_PRIVIDIUM_API_URL=http://localhost:8000
       - VITE_USER_PANEL_URL=http://localhost:3001
+      - VITE_EXPLORER_URL=http://localhost:3010
       - PORT=3000
     depends_on:
-      - permissions-api
+      - prividium-api
       - user-panel
     ports:
       - '3000:3000'
 
-  permissions-api:
-    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.98.1
+  prividium-api:
+    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.104.0
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
       - postgres
+      - zksyncos
     ports:
       - '8000:8000'
       - '9091:9091'
@@ -44,29 +46,10 @@ services:
       - CORS_CACHE_DURATION_MS=600000
       - ADMIN_PANEL_REDIRECT_URLS=http://localhost:3000/callback
       - BLOCK_EXPLORER_REDIRECT_URLS=http://localhost:3010/auth/callback
-
-  proxy:
-    image: quay.io/matterlabs_enterprise/prividium-proxy:v1.98.1
-    platform: linux/amd64
-    restart: unless-stopped
-    depends_on:
-      - postgres
-      - permissions-api
-      - zksyncos
-    ports:
-      - '8001:8001'
-      - '9092:9091'
-    environment:
-      - NODE_ENV=production
-      - PORT=8001
-      - METRICS_PORT=9091
-      - SEQUENCER_RPC_URL=http://zksyncos:3050
-      - CORS_ORIGIN=*
-      - PERMISSIONS_API_URL=http://permissions-api:8000
       - WALLETS_API_ENABLED=true
 
   user-panel:
-    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.98.1
+    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.104.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -75,19 +58,18 @@ services:
       - VITE_OIDC_REDIRECT_URI=http://localhost:3001/callback
       - VITE_OIDC_POST_LOGOUT_REDIRECT_URI=http://localhost:3001/login
       - VITE_OIDC_BUTTON_TEXT=Sign in with Keycloak
-      - VITE_PROXY_URL=http://localhost:8001
       - VITE_ADMIN_PANEL_REDIRECT_URI=http://localhost:3000/callback
       - VITE_AUTH_METHODS=oidc,crypto_native
       - VITE_CHAIN_ID=6565
       - VITE_CHAIN_NAME=Prividium™ Local
       - VITE_WALLETS_ENABLED=true
-      - VITE_PERMISSIONS_API_URL=http://localhost:8000
+      - VITE_PRIVIDIUM_API_URL=http://localhost:8000
       - VITE_L1_RPC_URL=http://l1:5010
       - VITE_L1_CHAIN_ID=31337
       - VITE_L1_CHAIN_NAME=L1 Anvil
+      - VITE_EXPLORER_URL=http://localhost:3010
       - PORT=3000
     depends_on:
-      - proxy
-      - permissions-api
+      - prividium-api
     ports:
       - '3001:3000'
