@@ -19,7 +19,7 @@ services:
       bash -c "
       cat > /docker-entrypoint-initdb.d/init.sql << 'EOF'
       -- Create databases for the prividium project
-      CREATE DATABASE permissions_api;
+      CREATE DATABASE prividium_api;
       -- Create databases for block explorer
       CREATE DATABASE prividium_block_explorer;
       
