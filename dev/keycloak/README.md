@@ -93,9 +93,9 @@ Keycloak issues JWT tokens with the following claims:
 ```
 
 **Important**: The `sub` claim contains the user's UUID (configured in `realm-export.json`), not their email address.
-This UUID is immutable and is used for secure user identification and admin role assignment in the Permissions API.
+This UUID is immutable and is used for secure user identification and admin role assignment in the Prividium™ API.
 
-These tokens are compatible with the existing Okta JWT validation code in the Permissions API.
+These tokens are compatible with the existing OIDC JWT validation code in the Prividium™ API.
 
 ## Troubleshooting
 
