@@ -174,7 +174,7 @@ services:
       # Pagination
       LIMITED_PAGINATION_MAX_ITEMS: '10000'
       API_LIMITED_PAGINATION_MAX_ITEMS: '1000'
-      DISABLE_BFF_API_SCHEMA_DOCS: 'false'
+      DISABLE_BFF_API_SCHEMA_DOCS: 'true'
     ports:
       - '3002:3000'
     depends_on:
