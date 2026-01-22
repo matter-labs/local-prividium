@@ -174,7 +174,7 @@ services:
       # Pagination
       LIMITED_PAGINATION_MAX_ITEMS: '10000'
       API_LIMITED_PAGINATION_MAX_ITEMS: '1000'
-      DISABLE_BFF_API_SCHEMA_DOCS: 'true'
+      DISABLE_BFF_API_SCHEMA_DOCS: 'false'
     ports:
       - '3002:3000'
     depends_on:
@@ -185,11 +185,8 @@ services:
     image: ghcr.io/matter-labs/block-explorer-app:latest
     platform: linux/amd64
     container_name: prividium-block-explorer-app
-    environment:
-      PORT: 3010
-      VITE_APP_ENVIRONMENT: prividium
     volumes:
-      - ./dev/block-explorer/block-explorer-config.js:/usr/src/app/packages/app/dist/config.js:ro
+      - ./dev/block-explorer/block-explorer-config.js:/usr/share/nginx/html/config.js:ro
     ports:
       - '3010:3010'
     depends_on:
