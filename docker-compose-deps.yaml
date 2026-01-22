@@ -185,11 +185,8 @@ services:
     image: ghcr.io/matter-labs/block-explorer-app:latest
     platform: linux/amd64
     container_name: prividium-block-explorer-app
-    environment:
-      PORT: 3010
-      VITE_APP_ENVIRONMENT: prividium
     volumes:
-      - ./dev/block-explorer/block-explorer-config.js:/usr/src/app/packages/app/dist/config.js:ro
+      - ./dev/block-explorer/block-explorer-config.js:/usr/share/nginx/html/config.js:ro
     ports:
       - '3010:3010'
     depends_on:
