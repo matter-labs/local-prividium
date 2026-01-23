@@ -68,6 +68,7 @@ services:
       - VITE_L1_CHAIN_ID=31337
       - VITE_L1_CHAIN_NAME=L1 Anvil
       - VITE_EXPLORER_URL=http://localhost:3010
+      - VITE_ADMIN_PANEL_URL=http://localhost:3000
       - PORT=3000
     depends_on:
       - prividium-api
