@@ -4,7 +4,7 @@ This directory contains seed data for crypto-native authentication testing.
 
 ## Overview
 
-The `seed-wallet-auth.sql` script seeds the database with test users.
+The `seed-wallet-auth.sql` script seeds the database with test users for development and E2E testing.
 
 ## Test Users
 
@@ -18,7 +18,7 @@ The seed script creates three users with their associated wallets:
 
 ## Wallet Addresses
 
-All wallet addresses are derived from the test mnemonic:
+All wallet addresses are derived from the E2E test mnemonic:
 
 ```
 test test test test test test test test test test test junk

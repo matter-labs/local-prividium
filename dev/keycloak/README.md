@@ -1,6 +1,7 @@
 # Local Keycloak OIDC Provider
 
-This directory contains the configuration for a local Keycloak instance used for local testing ONLY (DO NOT USE THIS FOR PRODUCTION).
+This directory contains the configuration for a local Keycloak instance used for local testing ONLY (DO NOT USE THIS FOR
+PRODUCTION).
 
 ## Overview
 
@@ -37,7 +38,8 @@ and are immutable, providing secure user identification.
 | user@local.dev  | 00000000-0000-0000-0000-000000000002 | user        | Regular user testing   |
 | test@local.dev  | 00000000-0000-0000-0000-000000000003 | user        | E2E test automation    |
 
-The `admin@local.dev` user is automatically granted admin privileges when their UUID is listed in the `OIDC_ADMIN_SUBS` environment variable.
+The `admin@local.dev` user is automatically granted admin privileges when their UUID is listed in the `OIDC_ADMIN_SUBS`
+environment variable.
 
 ## Starting Keycloak
 

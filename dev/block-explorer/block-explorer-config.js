@@ -11,7 +11,7 @@ window['##runtimeConfig'] = {
                 maintenance: false,
                 name: 'Local Prividium',
                 published: true,
-                rpcUrl: 'http://localhost:8001/rpc',
+                rpcUrl: 'http://localhost:8000/rpc',
                 baseTokenAddress: '0x000000000000000000000000000000000000800A',
                 prividium: true,
                 userPanelUrl: 'http://localhost:3001'
