@@ -13,4 +13,3 @@ scrape_configs:
           - 'host.docker.internal:9091'
         labels:
           service: 'prividium-api'
-

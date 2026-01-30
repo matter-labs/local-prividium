@@ -148,7 +148,6 @@ services:
   block-explorer-api:
     image: ghcr.io/matter-labs/block-explorer-api:latest
     platform: linux/amd64
-    container_name: prividium-block-explorer-api
     extra_hosts:
       - 'host.docker.internal:host-gateway'
     environment:
@@ -184,7 +183,6 @@ services:
   block-explorer-app:
     image: ghcr.io/matter-labs/block-explorer-app:latest
     platform: linux/amd64
-    container_name: prividium-block-explorer-app
     volumes:
       - ./dev/block-explorer/block-explorer-config.js:/usr/share/nginx/html/config.js:ro
     ports:
@@ -196,7 +194,6 @@ services:
   block-explorer-worker:
     image: ghcr.io/matter-labs/block-explorer-worker:latest
     platform: linux/amd64
-    container_name: prividium-block-explorer-worker
     extra_hosts:
       - 'host.docker.internal:host-gateway'
     environment:
@@ -225,7 +222,6 @@ services:
   block-explorer-data-fetcher:
     image: ghcr.io/matter-labs/block-explorer-data-fetcher:latest
     platform: linux/amd64
-    container_name: prividium-block-explorer-data-fetcher
     extra_hosts:
       - 'host.docker.internal:host-gateway'
     environment:
