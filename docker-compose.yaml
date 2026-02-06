@@ -5,7 +5,7 @@ include:
 
 services:
   admin-panel:
-    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.104.0
+    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.122.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -20,7 +20,7 @@ services:
       - '3000:3000'
 
   prividium-api:
-    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.104.0
+    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.122.0
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -47,9 +47,14 @@ services:
       - ADMIN_PANEL_REDIRECT_URLS=http://localhost:3000/callback
       - BLOCK_EXPLORER_REDIRECT_URLS=http://localhost:3010/auth/callback
       - WALLETS_API_ENABLED=true
+      - WEBAUTHN_RP_NAME=ZKsync Prividium
+      - WEBAUTHN_RP_ID=localhost
+      - WEBAUTHN_ORIGIN=http://localhost:3001
+      - WEBAUTHN_REQUIRE_USER_VERIFICATION=false
+
 
   user-panel:
-    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.104.0
+    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.122.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
