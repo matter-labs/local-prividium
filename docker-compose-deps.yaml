@@ -232,6 +232,53 @@ services:
     ports:
       - '3040:3040'
 
+  zksync-webhook-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: zksync_webhook_db
+    volumes:
+      - zksync_webhook_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d zksync_webhook_db']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  zksync-webhook-service:
+    image: ghcr.io/matter-labs/zksync-webhook-service:latest
+    platform: linux/amd64
+    init: true
+    restart: unless-stopped
+    depends_on:
+      zksync-webhook-db:
+        condition: service_healthy
+    environment:
+      DATABASE_HOST: zksync-webhook-db
+      DATABASE_PORT: '5432'
+      DATABASE_NAME: zksync_webhook_db
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: password
+      DATABASE_ENABLE_SSL: 'false'
+      DATABASE_SSL_REJECT_UNAUTHORIZED: 'true'
+      ZKSYNC_WEBHOOK_CONFIG: /app/config/config.prividium.local.toml
+      RUST_LOG: info
+      ENCRYPTION_KEY: a40c350fed393623dfaa54d93d96addcbf8ae845e4f1b6eeaeb444aa3645e800
+      ENCRYPTION_KDF_SALT: zksync-webhook-service:keycipher:v2
+      PRIVIDIUM_SIGNER_KEY: ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+      PRIVIDIUM_RPC_URL: http://host.docker.internal:5050
+      PRIVIDIUM_PERMISSIONS_API: http://host.docker.internal:8000
+      PRIVIDIUM_SIWE_DOMAIN: http://host.docker.internal:3000
+      ZKSYNC_WEBHOOK_API_CORS_ALLOW_ORIGIN: http://localhost:3000
+      ZKSYNC_WEBHOOK_ALLOW_HTTP_LOCALHOST: 'true'
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    ports:
+      - '8080:8080'
+      - '8081:8081'
+
   bridge-funds:
     image: node:22-slim
     working_dir: /app
@@ -290,4 +337,5 @@ volumes:
   zksyncos_db:
   prometheus_data:
   grafana_data:
+  zksync_webhook_db_data:
   bridge_funds_node_modules:
