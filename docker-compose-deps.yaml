@@ -266,7 +266,7 @@ services:
         condition: service_completed_successfully
 
   bundler:
-    image: quay.io/matterlabs_enterprise/prividium-bundler:v1.141.2
+    image: quay.io/matterlabs_enterprise/prividium-bundler:v1.142.0
     platform: linux/amd64
     restart: unless-stopped
     ports:
