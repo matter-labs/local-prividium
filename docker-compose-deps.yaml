@@ -248,7 +248,7 @@ services:
       retries: 10
 
   zksync-webhook-service:
-    image: ghcr.io/matter-labs/zksync-webhook-service:latest
+    image: quay.io/matterlabs_enterprise/webhook-service:v0.1.18
     platform: linux/amd64
     init: true
     restart: unless-stopped
