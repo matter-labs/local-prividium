@@ -88,7 +88,7 @@ SALT_NO_PREFIX=$(echo $SALT | sed 's/^0x//')
 PAYLOAD="0x${SALT_NO_PREFIX}${BYTECODE}"
 
 echo "Deploying EntryPoint via CREATE2 factory..."
-RESULT=$(cast send $CREATE2_FACTORY "$PAYLOAD" --private-key $PRIVATE_KEY --rpc-url $RPC_URL --json 2>&1)
+RESULT=$(cast send --legacy $CREATE2_FACTORY "$PAYLOAD" --private-key $PRIVATE_KEY --rpc-url $RPC_URL --json 2>&1)
 
 # Verify deployment
 sleep 2
