@@ -248,8 +248,8 @@ services:
       retries: 10
 
   zksync-webhook-service:
-    image: ghcr.io/matter-labs/zksync-webhook-service:latest
     platform: linux/amd64
+    image: quay.io/matterlabs_enterprise/webhook-service:v1.149.1
     init: true
     restart: unless-stopped
     depends_on:
@@ -313,7 +313,7 @@ services:
         condition: service_completed_successfully
 
   bundler:
-    image: quay.io/matterlabs_enterprise/prividium-bundler:v1.149.0
+    image: quay.io/matterlabs_enterprise/prividium-bundler:v1.149.1
     platform: linux/amd64
     restart: unless-stopped
     ports:
