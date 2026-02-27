@@ -4,7 +4,7 @@
 -- Insert roles if they don't exist
 INSERT INTO roles (role_name, system_permissions, is_system_role)
 VALUES
-    ('admin', '{contract_deployment,full_sequencer_rpc_access,full_read_access}', true),
+    ('admin', '{contract_deployment,full_sequencer_rpc_access,full_read_access,admin_read}', true),
     ('user', '{}', false)
 ON CONFLICT (role_name) DO NOTHING;
 
@@ -46,4 +46,5 @@ VALUES
     (decode('f39Fd6e51aad88F6F4ce6aB8827279cffFb92266', 'hex'), 'usr_admin_test_00001'),
     (decode('70997970C51812dc3A010C7d01b50e0d17dc79C8', 'hex'), 'usr_regular_test_0002'),
     (decode('3C44CdDdB6a900fa2b585dd299e03d12FA4293BC', 'hex'), 'usr_test_test_000003')
-ON CONFLICT (wallet_address) DO NOTHING;
+ON CONFLICT (wallet_address) WHERE deleted_at IS NULL DO NOTHING;
+
