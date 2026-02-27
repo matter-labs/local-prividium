@@ -249,7 +249,7 @@ services:
 
   zksync-webhook-service:
     platform: linux/amd64
-    image: quay.io/matterlabs_enterprise/webhook-service:v1.149.1
+    image: quay.io/matterlabs_enterprise/webhook-service:v0.1.19
     init: true
     restart: unless-stopped
     depends_on:
