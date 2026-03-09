@@ -35,7 +35,26 @@ database:
 docker exec -i zksync-prividium-postgres-1 psql -U postgres -d prividium_api < dev/wallet-auth/seed-wallet-auth.sql
 ```
 
-### 4. Access the Application
+### 4. Seed Webhook Service Account
+
+To add a local service account for webhook use, run:
+
+```bash
+docker exec -i zksync-prividium-postgres-1 psql -U postgres -d prividium_api < dev/webhook/seed-service-account.sql
+```
+
+This seeds a local service account:
+
+| Field | Value |
+|-------|-------|
+| Service ID | `svc_seed_local_000001` |
+| Name | `Local Seed Service` |
+| Public Address | `0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266` |
+| Private Key (Local Dev Only) | `0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80` |
+
+For more details, see [`dev/webhook/README.md`](dev/webhook/README.md).
+
+### 5. Access the Application
 
 Open the User Panel at **http://localhost:3001**
 
@@ -61,7 +80,7 @@ These wallet-based test users all have wallet addresses derived from the standar
 test test test test test test test test test test test junk
 ```
 
-### 5. Access Other Applications
+### 6. Access Other Applications
 
 Login to the Admin Panel at **http://localhost:3000**
 
