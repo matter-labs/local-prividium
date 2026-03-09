@@ -1,8 +1,8 @@
+import { ETH_ADDRESS } from '@matterlabs/zksync-js/core';
+import { createViemClient, createViemSdk } from '@matterlabs/zksync-js/viem';
 import { createPublicClient, createWalletClient, http, parseEther } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { anvil } from 'viem/chains';
-import { createViemClient, createViemSdk } from '@matterlabs/zksync-js/viem';
-import { ETH_ADDRESS } from '@matterlabs/zksync-js/core';
 
 const DEPLOYER_PK = (process.env.PRIVATE_KEY ||
     '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80') as `0x${string}`;
