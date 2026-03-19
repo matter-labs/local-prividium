@@ -30,9 +30,9 @@ services:
       "
 
   l1:
-    image: ghcr.io/foundry-rs/foundry:v1.3.4
+    image: ghcr.io/foundry-rs/foundry:v1.5.1
     volumes:
-      - ./dev/zksyncos/zkos-l1-state.json:/zkos-l1-state.json:ro
+      - ./dev/zksyncos/l1-state.json:/l1-state.json:ro
       - l1state:/home/foundry/l1state
     entrypoint: ''
     user: 'root'
@@ -45,15 +45,12 @@ services:
       retries: 5
     command: |
       bash -c "
-      if [[ ! -f /home/foundry/l1state/state.json ]]; then
-        cp /zkos-l1-state.json /home/foundry/l1state/state.json;
-      fi
       anvil --version
-      anvil --state=/home/foundry/l1state/state.json --port 5010 --host 0.0.0.0
+      anvil --load-state /l1-state.json --port 5010 --host 0.0.0.0
       "
 
   zksyncos:
-    image: ghcr.io/matter-labs/zksync-os-server:v0.12.0
+    image: ghcr.io/matter-labs/zksync-os-server:v0.17.1
     platform: linux/amd64
     ports:
       - '5050:3050'
@@ -62,9 +59,11 @@ services:
     user: 'root'
     working_dir: '/app'
     entrypoint: ''
-    command: ['/usr/bin/tini', '--', 'zksync-os-server']
+    command: ['/usr/bin/tini', '--', 'zksync-os-server', '--config', '/app/config/config.yaml']
     volumes:
       - zksyncos_db:/app/db
+      - ./dev/zksyncos/config.yaml:/app/config/config.yaml:ro
+      - ./dev/zksyncos/genesis.json:/app/config/genesis.json:ro
     depends_on:
       - l1
     healthcheck:
