@@ -314,11 +314,9 @@ services:
         condition: service_completed_successfully
 
   bundler:
-    image: quay.io/matterlabs_enterprise/prividium-bundler:v0.1.19
+    image: quay.io/matterlabs_enterprise/prividium-bundler:v1.164.2
     platform: linux/amd64
     restart: unless-stopped
-    ports:
-      - '4337:4337'
     environment:
       BUNDLER_PORT: '4337'
       SEQUENCER_RPC_URL: 'http://zksyncos:3050'

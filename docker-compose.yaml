@@ -5,7 +5,7 @@ include:
 
 services:
   admin-panel:
-    image: quay.io/matterlabs_enterprise/prividium-adminv2:v0.1.19
+    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.164.2
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -20,12 +20,13 @@ services:
       - '3000:3000'
 
   prividium-api:
-    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v0.1.19
+    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.164.2
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
       - postgres
       - zksyncos
+      - bundler
     ports:
       - '8000:8000'
       - '9091:9091'
@@ -52,10 +53,12 @@ services:
       - WEBAUTHN_ORIGIN=http://localhost:3001
       - WEBAUTHN_REQUIRE_USER_VERIFICATION=false
       - EXTRA_PUBLIC_CODE_ADDRESSES=0x36615cf349d7f6344891b1e7ca7c72883f5dc049
+      - BUNDLER_ENABLED=true
+      - BUNDLER_RPC_URL=http://bundler:4337
 
 
   user-panel:
-    image: quay.io/matterlabs_enterprise/prividium-user-panel:v0.1.19
+    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.164.2
     platform: linux/amd64
     restart: unless-stopped
     environment:
