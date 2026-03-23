@@ -30,9 +30,9 @@ services:
       "
 
   l1:
-    image: ghcr.io/foundry-rs/foundry:v1.3.4
+    image: ghcr.io/foundry-rs/foundry:v1.5.1
     volumes:
-      - ./dev/zksyncos/zkos-l1-state.json:/zkos-l1-state.json:ro
+      - ./dev/zksyncos/l1-state.json:/l1-state.json:ro
       - l1state:/home/foundry/l1state
     entrypoint: ''
     user: 'root'
@@ -45,15 +45,12 @@ services:
       retries: 5
     command: |
       bash -c "
-      if [[ ! -f /home/foundry/l1state/state.json ]]; then
-        cp /zkos-l1-state.json /home/foundry/l1state/state.json;
-      fi
       anvil --version
-      anvil --state=/home/foundry/l1state/state.json --port 5010 --host 0.0.0.0
+      anvil --load-state /l1-state.json --port 5010 --host 0.0.0.0
       "
 
   zksyncos:
-    image: ghcr.io/matter-labs/zksync-os-server:v0.12.0
+    image: ghcr.io/matter-labs/zksync-os-server:v0.17.1
     platform: linux/amd64
     ports:
       - '5050:3050'
@@ -62,9 +59,11 @@ services:
     user: 'root'
     working_dir: '/app'
     entrypoint: ''
-    command: ['/usr/bin/tini', '--', 'zksync-os-server']
+    command: ['/usr/bin/tini', '--', 'zksync-os-server', '--config', '/app/config/config.yaml']
     volumes:
       - zksyncos_db:/app/db
+      - ./dev/zksyncos/config.yaml:/app/config/config.yaml:ro
+      - ./dev/zksyncos/genesis.json:/app/config/genesis.json:ro
     depends_on:
       - l1
     healthcheck:
@@ -263,7 +262,7 @@ services:
       DATABASE_PASSWORD: password
       DATABASE_ENABLE_SSL: 'false'
       DATABASE_SSL_REJECT_UNAUTHORIZED: 'true'
-      ZKSYNC_WEBHOOK_CONFIG: /app/config/config.prividium.local.toml
+      ZKSYNC_WEBHOOK_CONFIG: /app/config/config.default.toml
       RUST_LOG: info
       ENCRYPTION_KEY: a40c350fed393623dfaa54d93d96addcbf8ae845e4f1b6eeaeb444aa3645e800
       ENCRYPTION_KDF_SALT: zksync-webhook-service:keycipher:v2
@@ -273,6 +272,8 @@ services:
       PRIVIDIUM_SIWE_DOMAIN: http://host.docker.internal:3000
       ZKSYNC_WEBHOOK_API_CORS_ALLOW_ORIGIN: http://localhost:3000
       ZKSYNC_WEBHOOK_ALLOW_HTTP_LOCALHOST: 'true'
+      ZKSYNC_WEBHOOK_CHAIN_NAME: 'local_prividium'
+      ZKSYNC_WEBHOOK_CHAIN_ID: 424242
     extra_hosts:
       - 'host.docker.internal:host-gateway'
     ports:
@@ -313,11 +314,9 @@ services:
         condition: service_completed_successfully
 
   bundler:
-    image: quay.io/matterlabs_enterprise/prividium-bundler:v1.162.1
+    image: quay.io/matterlabs_enterprise/prividium-bundler:v1.164.2
     platform: linux/amd64
     restart: unless-stopped
-    ports:
-      - '4337:4337'
     environment:
       BUNDLER_PORT: '4337'
       SEQUENCER_RPC_URL: 'http://zksyncos:3050'
