@@ -1,0 +1,18 @@
+{
+  "name": "@repo/sso-setup",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy-contracts": "tsx scripts/deploy-contracts.ts",
+    "setup-permissions": "tsx scripts/setup-permissions.ts"
+  },
+  "dependencies": {
+    "@matterlabs/zksync-js": "^0.0.2",
+    "postgres": "^3.4.0",
+    "viem": "^2.0.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0"
+  }
+}
