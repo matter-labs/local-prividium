@@ -314,7 +314,7 @@ services:
         condition: service_completed_successfully
 
   bundler:
-    image: quay.io/matterlabs_enterprise/prividium-bundler:v1.166.3
+    image: quay.io/matterlabs_enterprise/prividium-bundler:v0.1.19
     platform: linux/amd64
     restart: unless-stopped
     environment:
