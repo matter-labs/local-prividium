@@ -4,7 +4,9 @@
  *   2. Creates the `sso-smart-account` permission template with only the 5
  *      read functions per the auth-server-api README (ENTRY_POINT_V08, accountId,
  *      domainSeparator, eip712Domain, entryPoint) plus receive() for ETH transfers
- *   3. Creates the OAuth app for auth-server; appends SSO_CLIENT_ID to contracts.env
+ *   3. Creates the `erc-20` template for mintable ERC-20 tokens (used by example apps)
+ *   4. Creates the OAuth app for auth-server; appends SSO_CLIENT_ID to contracts.env
+ *   5. Seeds base users (user1@local.dev, user2@local.dev) matching the local Keycloak realm
  *
  * Idempotent: uses ON CONFLICT DO NOTHING / DO UPDATE.
  * Bypasses the Prividium API entirely — no auth required.
@@ -13,7 +15,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { toFunctionSelector } from 'viem';
+import { parseAbi, toFunctionSelector } from 'viem';
 import type { Abi, AbiFunction } from 'viem';
 import postgres from 'postgres';
 
@@ -240,7 +242,78 @@ async function main() {
 
     console.log(`✅ Seeded template: sso-smart-account (id=${templateId}, 5 public read + receive)`);
 
-    // ── 3. OAuth app for auth-server ─────────────────────────────────────────
+    // ── 3. ERC-20 (Mintable) template ─────────────────────────────────────────
+    // Shared template used by example apps that deploy mintable ERC-20 tokens.
+    // Functions with restrictArgument enforce that argument 0 == caller address.
+    const ERC20_MINTABLE_ABI = parseAbi([
+      'function allowance(address owner, address spender) view returns (uint256)',
+      'function approve(address spender, uint256 value) returns (bool)',
+      'function balanceOf(address account) view returns (uint256)',
+      'function decimals() view returns (uint8)',
+      'function mint(address _to, uint256 _amount) returns (bool)',
+      'function name() view returns (string)',
+      'function symbol() view returns (string)',
+      'function totalSupply() view returns (uint256)',
+      'function transfer(address to, uint256 value) returns (bool)',
+      'function transferFrom(address from, address to, uint256 value) returns (bool)',
+    ]);
+
+    // Functions where access is restricted to callers whose address matches argument 0.
+    const ERC20_RESTRICT_ARG: Record<string, number> = {
+      allowance: 0,
+      balanceOf: 0,
+      mint: 0,
+      transferFrom: 0,
+    };
+
+    const [erc20Template] = await sql<[{ id: number }]>`
+      INSERT INTO contract_templates (template_key, name, description, abi)
+      VALUES (
+        'erc-20',
+        'ERC-20 (Mintable)',
+        'Standard mintable ERC-20 token template. Restricted functions require the caller to match argument 0.',
+        ${JSON.stringify(ERC20_MINTABLE_ABI)}
+      )
+      ON CONFLICT (template_key) DO UPDATE SET template_key = EXCLUDED.template_key
+      RETURNING id
+    `;
+
+    const erc20TemplateId = erc20Template.id;
+
+    for (const item of ERC20_MINTABLE_ABI) {
+      if ((item as { type: string }).type !== 'function') continue;
+      const fn = item as AbiFunction;
+      const selector = toFunctionSelector(fn);
+      const selBuf = sel(selector);
+      const signature = formatSig(fn);
+      const accessType =
+        fn.stateMutability === 'view' || fn.stateMutability === 'pure' ? 'read' : 'write';
+      const argIndex = ERC20_RESTRICT_ARG[fn.name] ?? null;
+      const ruleType = argIndex !== null ? 'restrictArgument' : 'public';
+
+      const [perm] = await sql<[{ id: number }]>`
+        INSERT INTO contract_template_permissions
+          (template_id, method_selector, function_signature, access_type, rule_type)
+        VALUES (${erc20TemplateId}, ${selBuf}, ${signature}, ${accessType}, ${ruleType})
+        ON CONFLICT (template_id, method_selector) DO UPDATE SET
+          rule_type = EXCLUDED.rule_type,
+          access_type = EXCLUDED.access_type
+        RETURNING id
+      `;
+
+      if (argIndex !== null) {
+        await sql`
+          INSERT INTO contract_template_argument_restrictions (permission_id, argument_index)
+          VALUES (${perm.id}, ${argIndex})
+          ON CONFLICT (permission_id, argument_index) DO NOTHING
+        `;
+      }
+    }
+
+    const erc20FnCount = ERC20_MINTABLE_ABI.filter((i) => i.type === 'function').length;
+    console.log(`✅ Seeded template: erc-20 (id=${erc20TemplateId}, ${erc20FnCount} functions)`);
+
+    // ── 4. OAuth app for auth-server ─────────────────────────────────────────
     await sql`
       INSERT INTO applications (id, name, description, oauth_client_id, oauth_redirect_uris, origin, is_public)
       VALUES (
@@ -260,7 +333,24 @@ async function main() {
     appendEnv('SSO_CLIENT_ID', SSO_CLIENT_ID);
 
     console.log(`✅ Seeded OAuth app: clientId=${SSO_CLIENT_ID}`);
-    console.log(`\n✅ SSO permissions seed complete.`);
+    // ── 5. Base users (matching local Keycloak realm) ─────────────────────────
+    // These users exist in realm-export.json with fixed sub UUIDs.
+    // Seeded here so example apps can link wallets without re-creating the user records.
+    const BASE_USERS = [
+      { id: 'local-user1', display: 'user1@local.dev', sub: '00000000-0000-0000-0000-000000000004' },
+      { id: 'local-user2', display: 'user2@local.dev', sub: '00000000-0000-0000-0000-000000000005' },
+    ];
+
+    for (const user of BASE_USERS) {
+      await sql`
+        INSERT INTO users (id, display_name, oidc_sub, source)
+        VALUES (${user.id}, ${user.display}, ${user.sub}, 'oidc')
+        ON CONFLICT (id) DO NOTHING
+      `;
+      console.log(`✅ Base user: ${user.display}`);
+    }
+
+    console.log(`\n✅ Core permissions seed complete (SSO + ERC-20 template + base users).`);
   } finally {
     await sql.end();
   }

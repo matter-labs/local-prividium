@@ -1,0 +1,74 @@
+# Example app services for local-prividium.
+# All services are gated behind Docker Compose profiles — they do NOT start
+# by default. Use the profile flag to enable a specific example:
+#
+#   docker compose --profile institutional-demo up -d
+#
+# To test a locally built image, override the image env var:
+#
+#   <NAME>_SETUP_IMAGE=<name>-setup:local docker compose --profile <name> up -d
+#
+# See dev/examples/README.md for the full interface contract and steps to add a new example.
+
+name: zksync-prividium-examples
+
+services:
+  # ─── Institutional Demo (Intraday Repo) ────────────────────────────────────
+  # Port: 3500  |  Profile: institutional-demo
+  # Source: https://github.com/jackhamer09/prividium-institutional-demo (single-chain branch)
+
+  institutional-demo-deploy:
+    profiles: [institutional-demo]
+    image: ${INSTITUTIONAL_DEMO_SETUP_IMAGE:-ghcr.io/jackhamer09/institutional-demo-setup:single-chain}
+    command: deploy
+    volumes:
+      - ./dev/examples/institutional-demo:/output
+    environment:
+      RPC_URL: http://zksyncos:3050
+      L1_RPC_URL: http://l1:5010
+      CHAIN_ID: '6565'
+      DEPLOYER_PRIVATE_KEY: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/prividium_api
+    depends_on:
+      bridge-funds:
+        condition: service_completed_successfully
+
+  institutional-demo-seed:
+    profiles: [institutional-demo]
+    image: ${INSTITUTIONAL_DEMO_SETUP_IMAGE:-ghcr.io/jackhamer09/institutional-demo-setup:single-chain}
+    command: seed
+    volumes:
+      - ./dev/examples/institutional-demo:/output:ro
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/prividium_api
+    depends_on:
+      institutional-demo-deploy:
+        condition: service_completed_successfully
+      prividium-api:
+        condition: service_healthy
+      sso-permissions-setup:
+        condition: service_completed_successfully
+
+  institutional-demo:
+    profiles: [institutional-demo]
+    image: ghcr.io/jackhamer09/prividium-demo-app:single-chain
+    platform: linux/amd64
+    restart: unless-stopped
+    ports:
+      - '3500:3003'
+    env_file:
+      - path: ./dev/examples/institutional-demo/contracts.env
+        required: false
+    environment:
+      NUXT_PUBLIC_PRIVIDIUM_CLIENT_ID: institutional-demo-client
+      NUXT_PUBLIC_PRIVIDIUM_RPC_URL: http://localhost:8000/rpc
+      NUXT_PUBLIC_PRIVIDIUM_AUTH_BASE_URL: http://localhost:3001
+      NUXT_PUBLIC_PRIVIDIUM_PERMISSIONS_API_BASE_URL: http://localhost:8000
+      NUXT_PUBLIC_PRIVIDIUM_CHAIN_ID: 6565
+      NUXT_PUBLIC_PRIVIDIUM_CHAIN_NAME: Local Prividium
+      NUXT_PUBLIC_PRIVIDIUM_BLOCK_EXPLORER_URL: http://localhost:3010
+      NUXT_PUBLIC_PRIVIDIUM_BLOCK_EXPLORER_NAME: Block Explorer
+      NUXT_PUBLIC_ZKSYNC_SSO_AUTH_SERVER_URL: http://localhost:3006
+    depends_on:
+      institutional-demo-seed:
+        condition: service_completed_successfully

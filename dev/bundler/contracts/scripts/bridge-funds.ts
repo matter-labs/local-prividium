@@ -10,7 +10,7 @@ const PRIVATE_KEYS = (process.env.PRIVATE_KEYS || process.env.PRIVATE_KEY ||
     .split(',').map(k => k.trim()) as `0x${string}`[];
 const L1_RPC = process.env.L1_RPC_URL || 'http://localhost:5010';
 const L2_RPC = process.env.L2_RPC_URL || 'http://localhost:5050';
-const BRIDGE_AMOUNT = parseEther('100');
+const BRIDGE_AMOUNT = parseEther('1000');
 
 async function bridgeIfNeeded(pk: `0x${string}`) {
     const account = privateKeyToAccount(pk);

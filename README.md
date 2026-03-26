@@ -44,8 +44,10 @@ Click **"Sign in with Keycloak"** and use one of the pre-configured test users:
 | Email           | Password |
 |-----------------|----------|
 | admin@local.dev | password |
-| user@local.dev  | password |
-| test@local.dev  | password |
+| user1@local.dev | password |
+| user2@local.dev | password |
+
+> `user@local.dev` and `test@local.dev` also exist for backwards compatibility.
 
 Alternatively, you can login via a MetaMask wallet by clicking **"Sign in with Wallet"**:
 
@@ -66,6 +68,21 @@ test test test test test test test test test test test junk
 Login to the Admin Panel at **http://localhost:3000**
 
 Login to the Block Explorer at **http://localhost:3010** (Be sure a wallet is associated with the user's account)
+
+---
+
+## Example Demo Apps
+
+Optional demo apps can be started alongside the core stack using Docker Compose profiles:
+
+| App | Description | URL | Instructions |
+|-----|-------------|-----|--------------|
+| Intraday Repo Demo | Institutional lending demo with tokenised assets (USDC, TUST, SGD) | http://localhost:3500 | [GitHub](https://github.com/jackhamer09/prividium-institutional-demo) |
+
+```bash
+# Intraday Repo Demo
+docker compose --profile institutional-demo up -d
+```
 
 ---
 

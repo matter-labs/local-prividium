@@ -2,6 +2,7 @@ name: zksync-prividium
 
 include:
   - docker-compose-deps.yaml
+  - docker-compose-examples.yaml
 
 services:
   admin-panel:
@@ -42,12 +43,12 @@ services:
       - PORT=8000
       - METRICS_PORT=9091
       - SEQUENCER_RPC_URL=http://zksyncos:3050
-      - CORS_ORIGIN=http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:3006
+      - CORS_ORIGIN=http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:3006,http://localhost:3500
       - DATABASE_URL=postgres://postgres:postgres@postgres:5432/prividium_api
       - AUTH_METHODS=oidc,crypto_native
       - NODE_ENV=production
       - SIWE_CHAIN_ID=6565
-      - SIWE_VALID_DOMAINS=localhost:3000,localhost:3001,localhost:3006
+      - SIWE_VALID_DOMAINS=localhost:3000,localhost:3001,localhost:3006,localhost:3500
       - SIWE_HMAC_SECRET=aaaaaaaa00000000aaaaaaaa00000000aaaaaaaa00000000aaaaaaaa00000000
       - OIDC_JWKS_URI=http://keycloak:8080/realms/prividium/protocol/openid-connect/certs
       - OIDC_JWT_AUD=prividium-client
@@ -143,8 +144,15 @@ services:
       - NUXT_PUBLIC_WITNESS_WASM_URL=https://sso-oidc.zksync.dev/witness
     command: >
       sh -c "
-        CLIENT_ID=$$(grep '^SSO_CLIENT_ID=' /contracts.env 2>/dev/null | cut -d= -f2 | tr -d '[:space:]') ;
-        exec env NUXT_PUBLIC_PRIVIDIUM_CLIENT_ID=$$CLIENT_ID node .output/server/index.mjs
+        export NUXT_PUBLIC_PRIVIDIUM_CLIENT_ID=$$(grep '^SSO_CLIENT_ID=' /contracts.env 2>/dev/null | cut -d= -f2 | tr -d '[:space:]') ;
+        export NUXT_PUBLIC_GUARDIAN_EXECUTOR_ADDRESS=$$(grep '^SSO_GUARDIAN_EXECUTOR=' /contracts.env 2>/dev/null | cut -d= -f2 | tr -d '[:space:]') ;
+        export NUXT_PUBLIC_FACTORY_ADDRESS=$$(grep '^SSO_FACTORY=' /contracts.env 2>/dev/null | cut -d= -f2 | tr -d '[:space:]') ;
+        export NUXT_PUBLIC_EOA_VALIDATOR_ADDRESS=$$(grep '^SSO_EOA_VALIDATOR=' /contracts.env 2>/dev/null | cut -d= -f2 | tr -d '[:space:]') ;
+        export NUXT_PUBLIC_WEBAUTHN_VALIDATOR_ADDRESS=$$(grep '^SSO_WEBAUTHN_VALIDATOR=' /contracts.env 2>/dev/null | cut -d= -f2 | tr -d '[:space:]') ;
+        export NUXT_PUBLIC_SESSION_VALIDATOR_ADDRESS=$$(grep '^SSO_SESSION_VALIDATOR=' /contracts.env 2>/dev/null | cut -d= -f2 | tr -d '[:space:]') ;
+        export NUXT_PUBLIC_BEACON_ADDRESS=$$(grep '^SSO_BEACON=' /contracts.env 2>/dev/null | cut -d= -f2 | tr -d '[:space:]') ;
+        export NUXT_PUBLIC_ENTRY_POINT_ADDRESS=$$(grep '^SSO_ENTRY_POINT=' /contracts.env 2>/dev/null | cut -d= -f2 | tr -d '[:space:]') ;
+        exec node .output/server/index.mjs
       "
     depends_on:
       sso-permissions-setup:
