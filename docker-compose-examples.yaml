@@ -68,7 +68,7 @@ services:
       NUXT_PUBLIC_PRIVIDIUM_CHAIN_NAME: Local Prividium
       NUXT_PUBLIC_PRIVIDIUM_BLOCK_EXPLORER_URL: http://localhost:3010
       NUXT_PUBLIC_PRIVIDIUM_BLOCK_EXPLORER_NAME: Block Explorer
-      NUXT_PUBLIC_ZKSYNC_SSO_AUTH_SERVER_URL: http://localhost:3006
+      NUXT_PUBLIC_ZKSYNC_SSO_AUTH_SERVER_URL: http://localhost:3006/confirm
     depends_on:
       institutional-demo-seed:
         condition: service_completed_successfully
