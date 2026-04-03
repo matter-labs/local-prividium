@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@matterlabs/zksync-js':
-        specifier: ^0.0.2
-        version: 0.0.2(viem@2.46.2)
+        specifier: ^0.0.14
+        version: 0.0.14(viem@2.46.2)
       viem:
         specifier: ^2.0.0
         version: 2.46.2
@@ -180,8 +180,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@matterlabs/zksync-js@0.0.2':
-    resolution: {integrity: sha512-BAD2c6vxx7pdl4UaGQIPjspTD9qn178WiFmVMLFCy/Ey0M30sWkh+flbO9K1rIgy0Areh1pJKNNuclKgn9zD0A==}
+  '@matterlabs/zksync-js@0.0.14':
+    resolution: {integrity: sha512-crRDul2kYyQ3dpzBg+tVKcb7pz8O4cxrfQhRT/saSXQuuB+Lg6f/aWb5rI70furE2EiP0kXaH5RBO+AubwrYoA==}
     peerDependencies:
       '@typechain/ethers-v6': ^0.5.0
       ethers: ^6.15.0
@@ -365,7 +365,7 @@ snapshots:
   '@esbuild/win32-x64@0.27.3':
     optional: true
 
-  '@matterlabs/zksync-js@0.0.2(viem@2.46.2)':
+  '@matterlabs/zksync-js@0.0.14(viem@2.46.2)':
     dependencies:
       '@noble/hashes': 1.8.0
     optionalDependencies:

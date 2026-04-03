@@ -32,7 +32,7 @@ services:
   l1:
     image: ghcr.io/foundry-rs/foundry:v1.5.1
     volumes:
-      - ./dev/zksyncos/l1-state.json:/l1-state.json:ro
+      - ./dev/zksyncos/l1-state.json.gz:/l1-state.json.gz:ro
       - l1state:/home/foundry/l1state
     entrypoint: ''
     user: 'root'
@@ -45,12 +45,14 @@ services:
       retries: 5
     command: |
       bash -c "
-      anvil --version
-      anvil --load-state /l1-state.json --port 5010 --host 0.0.0.0
+      if [[ ! -f /home/foundry/l1state/state.json ]]; then
+        gzip -dc /l1-state.json.gz > /home/foundry/l1state/state.json;
+      fi
+      exec anvil --state=/home/foundry/l1state/state.json --state-interval 5 --preserve-historical-states --port 5010 --host 0.0.0.0
       "
 
   zksyncos:
-    image: ghcr.io/matter-labs/zksync-os-server:v0.17.1
+    image: ghcr.io/matter-labs/zksync-os-server:v0.18.2
     platform: linux/amd64
     ports:
       - '5050:3050'
@@ -61,11 +63,12 @@ services:
     entrypoint: ''
     command: ['/usr/bin/tini', '--', 'zksync-os-server', '--config', '/app/config/config.yaml']
     volumes:
-      - zksyncos_db:/app/db
+      - zksyncos_db:/db
       - ./dev/zksyncos/config.yaml:/app/config/config.yaml:ro
-      - ./dev/zksyncos/genesis.json:/app/config/genesis.json:ro
+      - ./dev/zksyncos/genesis.json:/app/local-chains/v30.2/genesis.json:ro
     depends_on:
-      - l1
+      l1:
+        condition: service_healthy
     healthcheck:
       test: ['CMD', '/usr/bin/bash', '-c', 'exec 3<>/dev/tcp/127.0.0.1/3050']
       interval: 10s
@@ -288,6 +291,7 @@ services:
       L1_RPC_URL: http://l1:5010
       L2_RPC_URL: http://zksyncos:3050
       PRIVATE_KEY: '0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba'
+      BRIDGE_SPONSOR_PRIVATE_KEY: '0x7726827caac94a7f9e1b160f7ea819f172f7b6f9d2a97f992c38edeab82d4110'
     command: sh -c "corepack enable && pnpm install && pnpm tsx scripts/bridge-funds.ts"
     depends_on:
       zksyncos:
@@ -312,7 +316,7 @@ services:
         condition: service_completed_successfully
 
   bundler:
-    image: quay.io/matterlabs_enterprise/prividium-bundler:v1.174.1
+    image: quay.io/matterlabs_enterprise/prividium-bundler:v1.175.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
