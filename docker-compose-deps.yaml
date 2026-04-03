@@ -5,7 +5,7 @@ services:
     image: postgres:15
     restart: unless-stopped
     ports:
-      - 5432:5432
+      - 127.0.0.1:5432:5432
     volumes:
       - postgres:/var/lib/postgresql/data
     environment:
@@ -228,8 +228,6 @@ services:
       BLOCKCHAIN_RPC_URL: http://zksyncos:3050
       PRIVIDIUM: 'true'
       PRIVIDIUM_PERMISSIONS_API_URL: http://host.docker.internal:8000/api
-    ports:
-      - '3040:3040'
 
   zksync-webhook-db:
     image: postgres:16-alpine
@@ -314,7 +312,7 @@ services:
         condition: service_completed_successfully
 
   bundler:
-    image: quay.io/matterlabs_enterprise/prividium-bundler:v1.174.0
+    image: quay.io/matterlabs_enterprise/prividium-bundler:v1.174.1
     platform: linux/amd64
     restart: unless-stopped
     environment:
