@@ -134,6 +134,8 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
       - ./dev/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./dev/grafana/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
+      - ./dev/grafana/datasources/dashboards:/etc/grafana/provisioning/dashboards/files:ro
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
@@ -316,7 +318,7 @@ services:
         condition: service_completed_successfully
 
   bundler:
-    image: quay.io/matterlabs_enterprise/prividium-bundler:v1.175.0
+    image: quay.io/matterlabs_enterprise/prividium-bundler:v0.1.19
     platform: linux/amd64
     restart: unless-stopped
     environment:
