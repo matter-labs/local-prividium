@@ -158,7 +158,7 @@ As everything is running locally, there are rich accounts on the L2.
 You can use the following to "add assets" directly to any other account for testing:
 
 ```bash
-cast send -r http://localhost:5050 f39Fd6e51aad88F6F4ce6aB8827279cffFb92266  --value 1000000000000000000 --private-key 0x7726827caac94a7f9e1b160f7ea819f172f7b6f9d2a97f992c38edeab82d4110
+cast send -r http://localhost:5050 <address-to-fund>  --value 1000000000000000000 --private-key 0x7726827caac94a7f9e1b160f7ea819f172f7b6f9d2a97f992c38edeab82d4110
 ```
 
 ---

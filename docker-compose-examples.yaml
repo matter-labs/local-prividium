@@ -20,6 +20,8 @@ services:
   institutional-demo-deploy:
     profiles: [institutional-demo]
     image: ${INSTITUTIONAL_DEMO_SETUP_IMAGE:-ghcr.io/jackhamer09/institutional-demo-setup:single-chain}
+    pull_policy: always
+    platform: linux/amd64
     command: deploy
     volumes:
       - ./dev/examples/institutional-demo:/output
@@ -36,6 +38,8 @@ services:
   institutional-demo-seed:
     profiles: [institutional-demo]
     image: ${INSTITUTIONAL_DEMO_SETUP_IMAGE:-ghcr.io/jackhamer09/institutional-demo-setup:single-chain}
+    pull_policy: always
+    platform: linux/amd64
     command: seed
     volumes:
       - ./dev/examples/institutional-demo:/output:ro
@@ -52,18 +56,18 @@ services:
   institutional-demo:
     profiles: [institutional-demo]
     image: ghcr.io/jackhamer09/prividium-demo-app:single-chain
+    pull_policy: always
     platform: linux/amd64
     restart: unless-stopped
     ports:
-      - '3500:3003'
+      - '3500:3500'
     env_file:
       - path: ./dev/examples/institutional-demo/contracts.env
         required: false
     environment:
       NUXT_PUBLIC_PRIVIDIUM_CLIENT_ID: institutional-demo-client
-      NUXT_PUBLIC_PRIVIDIUM_RPC_URL: http://localhost:8000/rpc
       NUXT_PUBLIC_PRIVIDIUM_AUTH_BASE_URL: http://localhost:3001
-      NUXT_PUBLIC_PRIVIDIUM_PERMISSIONS_API_BASE_URL: http://localhost:8000
+      NUXT_PUBLIC_PRIVIDIUM_API_BASE_URL: http://localhost:8000
       NUXT_PUBLIC_PRIVIDIUM_CHAIN_ID: 6565
       NUXT_PUBLIC_PRIVIDIUM_CHAIN_NAME: Local Prividium
       NUXT_PUBLIC_PRIVIDIUM_BLOCK_EXPLORER_URL: http://localhost:3010

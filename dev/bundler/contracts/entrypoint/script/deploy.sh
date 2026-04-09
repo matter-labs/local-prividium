@@ -52,7 +52,7 @@ if [ "$FACTORY_CODE" = "0x" ] || [ -z "$FACTORY_CODE" ]; then
 
     # Fund the factory deployer (needs ~0.1 ETH for gas)
     echo "Funding factory deployer at $FACTORY_DEPLOYER..."
-    cast send $FACTORY_DEPLOYER --value 0.1ether --private-key $PRIVATE_KEY --rpc-url $RPC_URL
+    cast send $FACTORY_DEPLOYER --legacy --value 0.1ether --private-key $PRIVATE_KEY --rpc-url $RPC_URL
 
     # Send the pre-signed deployment transaction
     echo "Deploying CREATE2 factory..."

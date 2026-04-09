@@ -47,9 +47,8 @@ All contract addresses injected at runtime via `NUXT_PUBLIC_*` env vars — no b
 | Var | local-prividium value |
 |-----|-----------------------|
 | `NUXT_PUBLIC_PRIVIDIUM_CLIENT_ID` | `<name>-client` |
-| `NUXT_PUBLIC_PRIVIDIUM_RPC_URL` | `http://localhost:8000/rpc` |
 | `NUXT_PUBLIC_PRIVIDIUM_AUTH_BASE_URL` | `http://localhost:3001` |
-| `NUXT_PUBLIC_PRIVIDIUM_PERMISSIONS_API_BASE_URL` | `http://localhost:8000` |
+| `NUXT_PUBLIC_PRIVIDIUM_API_BASE_URL` | `http://localhost:8000` |
 | `NUXT_PUBLIC_PRIVIDIUM_CHAIN_ID` | `6565` |
 | `NUXT_PUBLIC_PRIVIDIUM_CHAIN_NAME` | `Local Prividium` |
 | `NUXT_PUBLIC_PRIVIDIUM_BLOCK_EXPLORER_URL` | `http://localhost:3010` |
@@ -132,7 +131,7 @@ All contract addresses injected at runtime via `NUXT_PUBLIC_*` env vars — no b
     NUXT_PUBLIC_PRIVIDIUM_CLIENT_ID: <name>-client
     NUXT_PUBLIC_PRIVIDIUM_RPC_URL: http://localhost:8000/rpc
     NUXT_PUBLIC_PRIVIDIUM_AUTH_BASE_URL: http://localhost:3001
-    NUXT_PUBLIC_PRIVIDIUM_PERMISSIONS_API_BASE_URL: http://localhost:8000
+    NUXT_PUBLIC_PRIVIDIUM_API_BASE_URL: http://localhost:8000
     NUXT_PUBLIC_PRIVIDIUM_CHAIN_ID: 6565
     NUXT_PUBLIC_PRIVIDIUM_CHAIN_NAME: Local Prividium
     NUXT_PUBLIC_PRIVIDIUM_BLOCK_EXPLORER_URL: http://localhost:3010
