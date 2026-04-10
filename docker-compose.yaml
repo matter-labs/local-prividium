@@ -5,7 +5,7 @@ include:
 
 services:
   admin-panel:
-    image: quay.io/matterlabs_enterprise/prividium-adminv2:v0.1.19
+    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.183.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -20,7 +20,7 @@ services:
       - '3000:3000'
 
   prividium-api:
-    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v0.1.19
+    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.183.0
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -71,7 +71,7 @@ services:
 
 
   user-panel:
-    image: quay.io/matterlabs_enterprise/prividium-user-panel:v0.1.19
+    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.183.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
