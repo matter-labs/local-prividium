@@ -5,7 +5,7 @@ include:
 
 services:
   admin-panel:
-    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.184.0
+    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.185.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -20,7 +20,7 @@ services:
       - '3000:3000'
 
   prividium-api:
-    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.184.0
+    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.185.0
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -71,7 +71,7 @@ services:
 
 
   user-panel:
-    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.184.0
+    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.185.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -86,6 +86,7 @@ services:
       - VITE_CHAIN_NAME=Prividium™ Local
       - VITE_WALLETS_ENABLED=true
       - VITE_BRIDGING_ENABLED=true
+      - VITE_WITHDRAWAL_ENABLED=true
       - VITE_L1_RPC_URL=http://localhost:5010
       - VITE_L1_CHAIN_ID=31337
       - VITE_L1_CHAIN_NAME=Anvil Localhost
