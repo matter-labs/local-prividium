@@ -44,8 +44,8 @@ Click **"Sign in with Keycloak"** and use one of the pre-configured test users:
 | Email           | Password |
 |-----------------|----------|
 | admin@local.dev | password |
-| user@local.dev  | password |
-| test@local.dev  | password |
+| user1@local.dev | password |
+| user2@local.dev | password |
 
 Alternatively, you can login via a MetaMask wallet by clicking **"Sign in with Wallet"**:
 
@@ -69,6 +69,21 @@ Login to the Block Explorer at **http://localhost:3010** (Be sure a wallet is as
 
 ---
 
+## Example Demo Apps
+
+Optional demo apps can be started alongside the core stack using Docker Compose profiles:
+
+| App | Description | URL | Instructions |
+|-----|-------------|-----|--------------|
+| Intraday Repo Demo | Institutional lending demo with tokenised assets (USDC, TUST, SGD) | http://localhost:3500 | [GitHub](https://github.com/jackhamer09/prividium-institutional-demo) |
+
+```bash
+# Intraday Repo Demo
+docker compose --profile institutional-demo up -d
+```
+
+---
+
 ## Architecture
 
 ### Core Services (`docker-compose.yaml`)
@@ -86,7 +101,7 @@ Supporting infrastructure services:
 - **PostgreSQL** - Database for prividium api and block explorer
 - **Keycloak** - Identity provider for OIDC authentication
 - **zkSync OS** - Layer 2 sequencer
-- **L1 (Anvil)** - Local Ethereum testnet and settlement layer
+- **L1 (Anvil)** - Local Ethereum execution layer used as the settlement layer for this sandbox
 - **Block Explorer** - Transaction explorer
 - **Prometheus** - Metrics collection
 - **Grafana** - Metrics visualization
@@ -141,7 +156,7 @@ As everything is running locally, there are rich accounts on the L2.
 You can use the following to "add assets" directly to any other account for testing:
 
 ```bash
-cast send -r http://localhost:5050 f39Fd6e51aad88F6F4ce6aB8827279cffFb92266  --value 1 --private-key 0x7726827caac94a7f9e1b160f7ea819f172f7b6f9d2a97f992c38edeab82d4110
+cast send -r http://localhost:5050 <address-to-fund>  --value 1000000000000000000 --private-key 0x7726827caac94a7f9e1b160f7ea819f172f7b6f9d2a97f992c38edeab82d4110
 ```
 
 ---
