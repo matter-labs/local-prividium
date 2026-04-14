@@ -2,6 +2,11 @@
 
 A Docker Compose setup for running a complete Prividium™ cluster locally.
 
+> [!CAUTION]
+> This repository is for local development only.
+> The stack uses localhost-only URLs, seeded test users, test wallets, fixed development keys, and local infrastructure such as Anvil and a local zkSync OS instance.
+> Do not reuse these Docker Compose files, credentials, keys, or defaults against any shared or public network.
+
 ## Getting Started
 
 > [!WARNING]
