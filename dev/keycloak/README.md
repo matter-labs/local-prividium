@@ -37,6 +37,8 @@ and are immutable, providing secure user identification.
 | admin@local.dev | 00000000-0000-0000-0000-000000000001 | admin, user | Administrative testing |
 | user@local.dev  | 00000000-0000-0000-0000-000000000002 | user        | Regular user testing   |
 | test@local.dev  | 00000000-0000-0000-0000-000000000003 | user        | E2E test automation    |
+| user1@local.dev | 00000000-0000-0000-0000-000000000004 | user        | Demo user 1            |
+| user2@local.dev | 00000000-0000-0000-0000-000000000005 | user        | Demo user 2            |
 
 The `admin@local.dev` user is automatically granted admin privileges when their UUID is listed in the `OIDC_ADMIN_SUBS`
 environment variable.

@@ -292,7 +292,8 @@ services:
     environment:
       L1_RPC_URL: http://l1:5010
       L2_RPC_URL: http://zksyncos:3050
-      PRIVATE_KEY: '0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba'
+      # Key #3 = bundler executor; Key #0 = auth-server-api deployer
+      PRIVATE_KEYS: '0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba,0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
       BRIDGE_SPONSOR_PRIVATE_KEY: '0x7726827caac94a7f9e1b160f7ea819f172f7b6f9d2a97f992c38edeab82d4110'
     command: sh -c "corepack enable && pnpm install && pnpm tsx scripts/bridge-funds.ts"
     depends_on:
@@ -318,7 +319,7 @@ services:
         condition: service_completed_successfully
 
   bundler:
-    image: quay.io/matterlabs_enterprise/prividium-bundler:v1.187.0
+    image: quay.io/matterlabs_enterprise/prividium-bundler:v1.188.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -334,6 +335,45 @@ services:
       entrypoint-deployer:
         condition: service_completed_successfully
 
+  # ─── SSO infrastructure ──────────────────────────────────────────────────
+  # Extracts the contract artifacts shipped inside sso-auth-server-api into
+  # ./dev/sso-setup/contracts so sso-contracts-deployer can read them.
+  contracts-extractor:
+    image: ghcr.io/matter-labs/sso-auth-server-api:0df0643-1776120695303
+    platform: linux/amd64
+    volumes:
+      - ./dev/sso-setup/contracts:/output
+    entrypoint: ''
+    command: >
+      sh -c "
+        if [ -d /prod/auth-server-api/contracts ]; then
+          cp -r /prod/auth-server-api/contracts/. /output/
+          echo 'Extracted contract artifacts from image'
+        elif [ -f /output/WebAuthnValidator.sol/WebAuthnValidator.json ]; then
+          echo 'Using static contract artifacts (image predates Dockerfile update)'
+        else
+          echo 'ERROR: No contract artifacts found. Either rebuild the sso-auth-server-api image or restore dev/sso-setup/contracts/ from git.'
+          exit 1
+        fi
+      "
+
+  sso-contracts-deployer:
+    image: node:22-slim
+    working_dir: /app
+    volumes:
+      - ./dev/sso-setup:/app
+      - sso_setup_node_modules:/app/node_modules
+    environment:
+      L1_RPC_URL: http://l1:5010
+      RPC_URL: http://zksyncos:3050
+      CHAIN_ID: '6565'
+    command: sh -c "corepack enable && pnpm install && pnpm tsx scripts/deploy-contracts.ts"
+    depends_on:
+      entrypoint-deployer:
+        condition: service_completed_successfully
+      contracts-extractor:
+        condition: service_completed_successfully
+
 volumes:
   postgres:
   l1state:
@@ -342,3 +382,4 @@ volumes:
   grafana_data:
   zksync_webhook_db_data:
   bridge_funds_node_modules:
+  sso_setup_node_modules:
