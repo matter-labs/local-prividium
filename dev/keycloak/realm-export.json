@@ -144,6 +144,40 @@
                 }
             ],
             "realmRoles": ["user"]
+        },
+        {
+            "id": "00000000-0000-0000-0000-000000000004",
+            "username": "user1@local.dev",
+            "email": "user1@local.dev",
+            "emailVerified": true,
+            "enabled": true,
+            "firstName": "User",
+            "lastName": "One",
+            "credentials": [
+                {
+                    "type": "password",
+                    "value": "password",
+                    "temporary": false
+                }
+            ],
+            "realmRoles": ["user"]
+        },
+        {
+            "id": "00000000-0000-0000-0000-000000000005",
+            "username": "user2@local.dev",
+            "email": "user2@local.dev",
+            "emailVerified": true,
+            "enabled": true,
+            "firstName": "User",
+            "lastName": "Two",
+            "credentials": [
+                {
+                    "type": "password",
+                    "value": "password",
+                    "temporary": false
+                }
+            ],
+            "realmRoles": ["user"]
         }
     ]
 }

@@ -1,0 +1,820 @@
+{
+    "annotations": {
+        "list": [
+            {
+                "builtIn": 1,
+                "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+                "enable": true,
+                "hide": true,
+                "iconColor": "rgba(0, 211, 255, 1)",
+                "name": "Annotations & Alerts",
+                "type": "dashboard"
+            }
+        ]
+    },
+    "description": "Load test impact on the local Prividium permissions-api (era_dudoser)",
+    "editable": true,
+    "fiscalYearStartMonth": 0,
+    "graphTooltip": 1,
+    "links": [],
+    "panels": [
+        {
+            "collapsed": false,
+            "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+            "id": 100,
+            "title": "Overview",
+            "type": "row"
+        },
+        {
+            "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+            "fieldConfig": {
+                "defaults": {
+                    "color": { "mode": "thresholds" },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            { "color": "green", "value": 0 },
+                            { "color": "yellow", "value": 50 },
+                            { "color": "red", "value": 200 }
+                        ]
+                    },
+                    "unit": "reqps"
+                },
+                "overrides": []
+            },
+            "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+            "id": 101,
+            "options": {
+                "colorMode": "background",
+                "graphMode": "area",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+                "showPercentChange": false,
+                "textMode": "auto"
+            },
+            "pluginVersion": "10.2.0",
+            "targets": [
+                {
+                    "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+                    "editorMode": "code",
+                    "expr": "sum(rate(json_rpc_requests_total[1m]))",
+                    "legendFormat": "RPS",
+                    "range": true,
+                    "refId": "A"
+                }
+            ],
+            "title": "Current RPS",
+            "type": "stat"
+        },
+        {
+            "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+            "fieldConfig": {
+                "defaults": {
+                    "color": { "mode": "thresholds" },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            { "color": "green", "value": 0 },
+                            { "color": "yellow", "value": 0.5 },
+                            { "color": "red", "value": 1 }
+                        ]
+                    },
+                    "unit": "s"
+                },
+                "overrides": []
+            },
+            "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
+            "id": 102,
+            "options": {
+                "colorMode": "background",
+                "graphMode": "area",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+                "showPercentChange": false,
+                "textMode": "auto"
+            },
+            "pluginVersion": "10.2.0",
+            "targets": [
+                {
+                    "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+                    "editorMode": "code",
+                    "expr": "histogram_quantile(0.50, sum(rate(json_rpc_request_duration_seconds_bucket[1m])) by (le))",
+                    "legendFormat": "P50",
+                    "range": true,
+                    "refId": "A"
+                }
+            ],
+            "title": "P50 Latency",
+            "type": "stat"
+        },
+        {
+            "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+            "fieldConfig": {
+                "defaults": {
+                    "color": { "mode": "thresholds" },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            { "color": "green", "value": 0 },
+                            { "color": "yellow", "value": 1 },
+                            { "color": "red", "value": 3 }
+                        ]
+                    },
+                    "unit": "s"
+                },
+                "overrides": []
+            },
+            "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
+            "id": 103,
+            "options": {
+                "colorMode": "background",
+                "graphMode": "area",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+                "showPercentChange": false,
+                "textMode": "auto"
+            },
+            "pluginVersion": "10.2.0",
+            "targets": [
+                {
+                    "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+                    "editorMode": "code",
+                    "expr": "histogram_quantile(0.95, sum(rate(json_rpc_request_duration_seconds_bucket[1m])) by (le))",
+                    "legendFormat": "P95",
+                    "range": true,
+                    "refId": "A"
+                }
+            ],
+            "title": "P95 Latency",
+            "type": "stat"
+        },
+        {
+            "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+            "fieldConfig": {
+                "defaults": {
+                    "color": { "mode": "thresholds" },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            { "color": "green", "value": 0 },
+                            { "color": "yellow", "value": 2 },
+                            { "color": "red", "value": 5 }
+                        ]
+                    },
+                    "unit": "s"
+                },
+                "overrides": []
+            },
+            "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
+            "id": 104,
+            "options": {
+                "colorMode": "background",
+                "graphMode": "area",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+                "showPercentChange": false,
+                "textMode": "auto"
+            },
+            "pluginVersion": "10.2.0",
+            "targets": [
+                {
+                    "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+                    "editorMode": "code",
+                    "expr": "histogram_quantile(0.99, sum(rate(json_rpc_request_duration_seconds_bucket[1m])) by (le))",
+                    "legendFormat": "P99",
+                    "range": true,
+                    "refId": "A"
+                }
+            ],
+            "title": "P99 Latency",
+            "type": "stat"
+        },
+        {
+            "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+            "fieldConfig": {
+                "defaults": {
+                    "color": { "mode": "thresholds" },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [{ "color": "green", "value": 0 }, { "color": "red", "value": 0.001 }]
+                    },
+                    "unit": "percentunit"
+                },
+                "overrides": []
+            },
+            "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
+            "id": 105,
+            "options": {
+                "colorMode": "background",
+                "graphMode": "area",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+                "showPercentChange": false,
+                "textMode": "auto"
+            },
+            "pluginVersion": "10.2.0",
+            "targets": [
+                {
+                    "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+                    "editorMode": "code",
+                    "expr": "sum(rate(json_rpc_requests_total{result=\"error\"}[1m])) / sum(rate(json_rpc_requests_total[1m]))",
+                    "legendFormat": "Error rate",
+                    "range": true,
+                    "refId": "A"
+                }
+            ],
+            "title": "Error Rate",
+            "type": "stat"
+        },
+        {
+            "collapsed": false,
+            "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
+            "id": 200,
+            "title": "JSON RPC — Throughput",
+            "type": "row"
+        },
+        {
+            "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+            "fieldConfig": {
+                "defaults": {
+                    "color": { "mode": "palette-classic" },
+                    "custom": {
+                        "axisBorderShow": false,
+                        "axisCenteredZero": false,
+                        "axisColorMode": "text",
+                        "axisLabel": "",
+                        "axisPlacement": "auto",
+                        "barAlignment": 0,
+                        "barWidthFactor": 0.6,
+                        "drawStyle": "bars",
+                        "fillOpacity": 52,
+                        "gradientMode": "none",
+                        "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+                        "insertNulls": false,
+                        "lineInterpolation": "linear",
+                        "lineWidth": 2,
+                        "pointSize": 4,
+                        "scaleDistribution": { "type": "linear" },
+                        "showPoints": "never",
+                        "showValues": false,
+                        "spanNulls": false,
+                        "stacking": { "group": "A", "mode": "normal" },
+                        "thresholdsStyle": { "mode": "off" }
+                    },
+                    "mappings": [],
+                    "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": 0 }] },
+                    "unit": "reqps"
+                },
+                "overrides": []
+            },
+            "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+            "id": 201,
+            "options": {
+                "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true },
+                "tooltip": { "hideZeros": false, "mode": "single", "sort": "none" }
+            },
+            "pluginVersion": "10.2.0",
+            "targets": [
+                {
+                    "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+                    "editorMode": "code",
+                    "expr": "sum(rate(json_rpc_requests_total[1m])) by (role)",
+                    "format": "time_series",
+                    "legendFormat": "{{role}}",
+                    "range": true,
+                    "refId": "A"
+                }
+            ],
+            "title": "Request Rate by Role",
+            "type": "timeseries"
+        },
+        {
+            "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+            "fieldConfig": {
+                "defaults": {
+                    "color": { "mode": "palette-classic" },
+                    "custom": {
+                        "axisBorderShow": false,
+                        "axisCenteredZero": false,
+                        "axisColorMode": "text",
+                        "axisLabel": "",
+                        "axisPlacement": "auto",
+                        "barAlignment": 0,
+                        "barWidthFactor": 0.6,
+                        "drawStyle": "bars",
+                        "fillOpacity": 52,
+                        "gradientMode": "none",
+                        "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+                        "insertNulls": false,
+                        "lineInterpolation": "linear",
+                        "lineWidth": 2,
+                        "pointSize": 4,
+                        "scaleDistribution": { "type": "linear" },
+                        "showPoints": "never",
+                        "showValues": false,
+                        "spanNulls": false,
+                        "stacking": { "group": "A", "mode": "normal" },
+                        "thresholdsStyle": { "mode": "off" }
+                    },
+                    "mappings": [],
+                    "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": 0 }] },
+                    "unit": "reqps"
+                },
+                "overrides": []
+            },
+            "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+            "id": 202,
+            "options": {
+                "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true },
+                "tooltip": { "hideZeros": false, "mode": "single", "sort": "none" }
+            },
+            "pluginVersion": "10.2.0",
+            "targets": [
+                {
+                    "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+                    "editorMode": "code",
+                    "expr": "sum(rate(json_rpc_requests_total[1m])) by (method)",
+                    "format": "time_series",
+                    "legendFormat": "{{method}}",
+                    "range": true,
+                    "refId": "A"
+                }
+            ],
+            "title": "Request Rate by Method",
+            "type": "timeseries"
+        },
+        {
+            "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+            "fieldConfig": {
+                "defaults": {
+                    "color": { "mode": "palette-classic" },
+                    "custom": {
+                        "axisBorderShow": false,
+                        "axisCenteredZero": false,
+                        "axisColorMode": "text",
+                        "drawStyle": "bars",
+                        "fillOpacity": 52,
+                        "stacking": { "group": "A", "mode": "normal" },
+                        "lineWidth": 1,
+                        "showPoints": "never",
+                        "spanNulls": false
+                    },
+                    "mappings": [],
+                    "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": 0 }] },
+                    "unit": "reqps"
+                },
+                "overrides": [
+                    {
+                        "matcher": { "id": "byRegexp", "options": ".*error.*" },
+                        "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }]
+                    },
+                    {
+                        "matcher": { "id": "byRegexp", "options": ".*success.*" },
+                        "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }]
+                    }
+                ]
+            },
+            "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+            "id": 203,
+            "options": {
+                "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true },
+                "tooltip": { "hideZeros": false, "mode": "single", "sort": "none" }
+            },
+            "pluginVersion": "10.2.0",
+            "targets": [
+                {
+                    "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+                    "editorMode": "code",
+                    "expr": "sum(rate(json_rpc_requests_total[1m])) by (result)",
+                    "format": "time_series",
+                    "legendFormat": "{{result}}",
+                    "range": true,
+                    "refId": "A"
+                }
+            ],
+            "title": "Request Rate by Result (success / error)",
+            "type": "timeseries"
+        },
+        {
+            "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+            "fieldConfig": {
+                "defaults": {
+                    "color": { "mode": "palette-classic" },
+                    "custom": {
+                        "axisBorderShow": false,
+                        "drawStyle": "bars",
+                        "fillOpacity": 52,
+                        "stacking": { "group": "A", "mode": "normal" },
+                        "lineWidth": 1,
+                        "showPoints": "never",
+                        "spanNulls": false
+                    },
+                    "mappings": [],
+                    "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": 0 }] },
+                    "unit": "reqps"
+                },
+                "overrides": []
+            },
+            "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+            "id": 204,
+            "options": {
+                "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true },
+                "tooltip": { "hideZeros": false, "mode": "single", "sort": "none" }
+            },
+            "pluginVersion": "10.2.0",
+            "targets": [
+                {
+                    "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+                    "editorMode": "code",
+                    "expr": "sum(rate(json_rpc_requests_total[1m])) by (status_code)",
+                    "format": "time_series",
+                    "legendFormat": "HTTP {{status_code}}",
+                    "range": true,
+                    "refId": "A"
+                }
+            ],
+            "title": "Request Rate by HTTP Status Code",
+            "type": "timeseries"
+        },
+        {
+            "collapsed": false,
+            "gridPos": { "h": 1, "w": 24, "x": 0, "y": 22 },
+            "id": 300,
+            "title": "JSON RPC — Latency",
+            "type": "row"
+        },
+        {
+            "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+            "fieldConfig": {
+                "defaults": {
+                    "custom": {
+                        "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+                        "scaleDistribution": { "type": "linear" }
+                    },
+                    "unit": "s"
+                },
+                "overrides": []
+            },
+            "gridPos": { "h": 9, "w": 12, "x": 0, "y": 23 },
+            "id": 301,
+            "options": {
+                "calculate": false,
+                "cellGap": 2,
+                "color": {
+                    "exponent": 0.5,
+                    "fill": "dark-orange",
+                    "mode": "spectrum",
+                    "reverse": false,
+                    "scheme": "Spectral",
+                    "steps": 64
+                },
+                "exemplars": { "color": "rgba(255,0,255,0.7)" },
+                "filterValues": { "le": 1e-9 },
+                "legend": { "show": true },
+                "rowsFrame": { "layout": "auto" },
+                "tooltip": { "mode": "single", "showColorScale": false, "yHistogram": false },
+                "yAxis": { "axisPlacement": "left", "reverse": false, "unit": "s" }
+            },
+            "pluginVersion": "10.2.0",
+            "targets": [
+                {
+                    "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+                    "editorMode": "code",
+                    "expr": "sum(rate(json_rpc_request_duration_seconds_bucket[$__rate_interval])) by (le)",
+                    "format": "heatmap",
+                    "legendFormat": "__auto",
+                    "range": true,
+                    "refId": "A"
+                }
+            ],
+            "title": "Response Time Heatmap (all methods)",
+            "type": "heatmap"
+        },
+        {
+            "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+            "fieldConfig": {
+                "defaults": {
+                    "color": { "mode": "palette-classic" },
+                    "custom": {
+                        "axisBorderShow": false,
+                        "drawStyle": "line",
+                        "fillOpacity": 10,
+                        "lineWidth": 2,
+                        "showPoints": "never",
+                        "spanNulls": false,
+                        "stacking": { "group": "A", "mode": "none" }
+                    },
+                    "mappings": [],
+                    "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": 0 }] },
+                    "unit": "s"
+                },
+                "overrides": [
+                    {
+                        "matcher": { "id": "byRegexp", "options": "/P50/" },
+                        "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }]
+                    },
+                    {
+                        "matcher": { "id": "byRegexp", "options": "/P95/" },
+                        "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }]
+                    },
+                    {
+                        "matcher": { "id": "byRegexp", "options": "/P99/" },
+                        "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }]
+                    }
+                ]
+            },
+            "gridPos": { "h": 9, "w": 12, "x": 12, "y": 23 },
+            "id": 302,
+            "options": {
+                "legend": {
+                    "calcs": ["mean", "max"],
+                    "displayMode": "table",
+                    "placement": "bottom",
+                    "showLegend": true
+                },
+                "tooltip": { "hideZeros": false, "mode": "multi", "sort": "none" }
+            },
+            "pluginVersion": "10.2.0",
+            "targets": [
+                {
+                    "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+                    "editorMode": "code",
+                    "expr": "histogram_quantile(0.50, sum(rate(json_rpc_request_duration_seconds_bucket[1m])) by (le))",
+                    "legendFormat": "P50 (overall)",
+                    "range": true,
+                    "refId": "A"
+                },
+                {
+                    "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+                    "editorMode": "code",
+                    "expr": "histogram_quantile(0.95, sum(rate(json_rpc_request_duration_seconds_bucket[1m])) by (le))",
+                    "legendFormat": "P95 (overall)",
+                    "range": true,
+                    "refId": "B"
+                },
+                {
+                    "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+                    "editorMode": "code",
+                    "expr": "histogram_quantile(0.99, sum(rate(json_rpc_request_duration_seconds_bucket[1m])) by (le))",
+                    "legendFormat": "P99 (overall)",
+                    "range": true,
+                    "refId": "C"
+                }
+            ],
+            "title": "Overall Response Time Percentiles (P50 / P95 / P99)",
+            "type": "timeseries"
+        },
+        {
+            "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+            "fieldConfig": {
+                "defaults": {
+                    "color": { "mode": "palette-classic" },
+                    "custom": {
+                        "axisBorderShow": false,
+                        "drawStyle": "line",
+                        "fillOpacity": 10,
+                        "lineWidth": 2,
+                        "showPoints": "never",
+                        "spanNulls": false,
+                        "stacking": { "group": "A", "mode": "none" }
+                    },
+                    "mappings": [],
+                    "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": 0 }] },
+                    "unit": "s"
+                },
+                "overrides": []
+            },
+            "gridPos": { "h": 9, "w": 24, "x": 0, "y": 32 },
+            "id": 303,
+            "options": {
+                "legend": {
+                    "calcs": ["mean", "max"],
+                    "displayMode": "table",
+                    "placement": "right",
+                    "showLegend": true
+                },
+                "tooltip": { "hideZeros": false, "mode": "multi", "sort": "none" }
+            },
+            "pluginVersion": "10.2.0",
+            "targets": [
+                {
+                    "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+                    "editorMode": "code",
+                    "expr": "histogram_quantile(0.95, sum(rate(json_rpc_request_duration_seconds_bucket{method=~\"$rpc_method\"}[1m])) by (le, method))",
+                    "format": "time_series",
+                    "legendFormat": "P95 — {{method}}",
+                    "range": true,
+                    "refId": "A"
+                }
+            ],
+            "title": "P95 Latency by Method",
+            "type": "timeseries"
+        },
+        {
+            "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+            "fieldConfig": {
+                "defaults": {
+                    "color": { "mode": "palette-classic" },
+                    "custom": {
+                        "axisBorderShow": false,
+                        "drawStyle": "line",
+                        "fillOpacity": 10,
+                        "lineWidth": 2,
+                        "showPoints": "never",
+                        "spanNulls": false,
+                        "stacking": { "group": "A", "mode": "none" }
+                    },
+                    "mappings": [],
+                    "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": 0 }] },
+                    "unit": "s"
+                },
+                "overrides": []
+            },
+            "gridPos": { "h": 9, "w": 24, "x": 0, "y": 41 },
+            "id": 304,
+            "options": {
+                "legend": {
+                    "calcs": ["mean", "max"],
+                    "displayMode": "table",
+                    "placement": "right",
+                    "showLegend": true
+                },
+                "tooltip": { "hideZeros": false, "mode": "multi", "sort": "none" }
+            },
+            "pluginVersion": "10.2.0",
+            "targets": [
+                {
+                    "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+                    "editorMode": "code",
+                    "expr": "histogram_quantile(0.95, sum(rate(json_rpc_request_duration_seconds_bucket{role=~\"$rpc_role\"}[1m])) by (le, role))",
+                    "format": "time_series",
+                    "legendFormat": "P95 — {{role}}",
+                    "range": true,
+                    "refId": "A"
+                }
+            ],
+            "title": "P95 Latency by Role",
+            "type": "timeseries"
+        },
+        {
+            "collapsed": false,
+            "gridPos": { "h": 1, "w": 24, "x": 0, "y": 50 },
+            "id": 400,
+            "title": "Rate Limiting",
+            "type": "row"
+        },
+        {
+            "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+            "fieldConfig": {
+                "defaults": {
+                    "color": { "mode": "palette-classic" },
+                    "custom": {
+                        "axisBorderShow": false,
+                        "drawStyle": "bars",
+                        "fillOpacity": 60,
+                        "lineWidth": 1,
+                        "showPoints": "never",
+                        "spanNulls": false,
+                        "stacking": { "group": "A", "mode": "normal" }
+                    },
+                    "mappings": [],
+                    "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": 0 }] },
+                    "unit": "reqps"
+                },
+                "overrides": [
+                    {
+                        "matcher": { "id": "byRegexp", "options": ".*429.*" },
+                        "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }]
+                    }
+                ]
+            },
+            "gridPos": { "h": 8, "w": 12, "x": 0, "y": 51 },
+            "id": 401,
+            "options": {
+                "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true },
+                "tooltip": { "hideZeros": true, "mode": "single", "sort": "none" }
+            },
+            "pluginVersion": "10.2.0",
+            "targets": [
+                {
+                    "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+                    "editorMode": "code",
+                    "expr": "sum(rate(json_rpc_requests_total{status_code=\"429\"}[1m]))",
+                    "legendFormat": "429 Rate Limited",
+                    "range": true,
+                    "refId": "A"
+                }
+            ],
+            "title": "Rate-Limited Requests (HTTP 429)",
+            "type": "timeseries"
+        },
+        {
+            "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+            "fieldConfig": {
+                "defaults": {
+                    "color": { "mode": "palette-classic" },
+                    "custom": {
+                        "axisBorderShow": false,
+                        "drawStyle": "bars",
+                        "fillOpacity": 60,
+                        "lineWidth": 1,
+                        "showPoints": "never",
+                        "spanNulls": false,
+                        "stacking": { "group": "A", "mode": "normal" }
+                    },
+                    "mappings": [],
+                    "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": 0 }] },
+                    "unit": "reqps"
+                },
+                "overrides": [
+                    {
+                        "matcher": { "id": "byRegexp", "options": ".*401.*" },
+                        "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }]
+                    }
+                ]
+            },
+            "gridPos": { "h": 8, "w": 12, "x": 12, "y": 51 },
+            "id": 402,
+            "options": {
+                "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true },
+                "tooltip": { "hideZeros": true, "mode": "single", "sort": "none" }
+            },
+            "pluginVersion": "10.2.0",
+            "targets": [
+                {
+                    "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+                    "editorMode": "code",
+                    "expr": "sum(rate(json_rpc_requests_total{status_code=\"401\"}[1m]))",
+                    "legendFormat": "401 Unauthorized",
+                    "range": true,
+                    "refId": "A"
+                }
+            ],
+            "title": "Auth Failures (HTTP 401)",
+            "type": "timeseries"
+        }
+    ],
+    "preload": false,
+    "refresh": "10s",
+    "schemaVersion": 39,
+    "tags": ["load-test", "prividium", "rpc"],
+    "templating": {
+        "list": [
+            {
+                "allValue": ".*",
+                "current": { "text": "All", "value": "$__all" },
+                "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+                "definition": "label_values(json_rpc_request_duration_seconds_count, method)",
+                "includeAll": true,
+                "label": "RPC Method",
+                "multi": true,
+                "name": "rpc_method",
+                "options": [],
+                "query": {
+                    "qryType": 1,
+                    "query": "label_values(json_rpc_request_duration_seconds_count, method)",
+                    "refId": "StandardVariableQuery"
+                },
+                "refresh": 2,
+                "sort": 1,
+                "type": "query"
+            },
+            {
+                "allValue": ".*",
+                "current": { "text": "All", "value": "$__all" },
+                "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+                "definition": "label_values(json_rpc_request_duration_seconds_count, role)",
+                "includeAll": true,
+                "label": "RPC Role",
+                "multi": true,
+                "name": "rpc_role",
+                "options": [],
+                "query": {
+                    "qryType": 1,
+                    "query": "label_values(json_rpc_request_duration_seconds_count, role)",
+                    "refId": "StandardVariableQuery"
+                },
+                "refresh": 2,
+                "sort": 1,
+                "type": "query"
+            }
+        ]
+    },
+    "time": { "from": "now-30m", "to": "now" },
+    "timepicker": {},
+    "timezone": "browser",
+    "title": "Load Test — Prividium RPC",
+    "uid": "load-test-prividium-local",
+    "version": 1,
+    "weekStart": ""
+}

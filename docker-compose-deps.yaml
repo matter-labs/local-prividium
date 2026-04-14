@@ -5,7 +5,7 @@ services:
     image: postgres:15
     restart: unless-stopped
     ports:
-      - 5432:5432
+      - 127.0.0.1:5432:5432
     volumes:
       - postgres:/var/lib/postgresql/data
     environment:
@@ -32,7 +32,7 @@ services:
   l1:
     image: ghcr.io/foundry-rs/foundry:v1.5.1
     volumes:
-      - ./dev/zksyncos/l1-state.json:/l1-state.json:ro
+      - ./dev/zksyncos/l1-state.json.gz:/l1-state.json.gz:ro
       - l1state:/home/foundry/l1state
     entrypoint: ''
     user: 'root'
@@ -45,12 +45,14 @@ services:
       retries: 5
     command: |
       bash -c "
-      anvil --version
-      anvil --load-state /l1-state.json --port 5010 --host 0.0.0.0
+      if [[ ! -f /home/foundry/l1state/state.json ]]; then
+        gzip -dc /l1-state.json.gz > /home/foundry/l1state/state.json;
+      fi
+      exec anvil --state=/home/foundry/l1state/state.json --state-interval 5 --preserve-historical-states --port 5010 --host 0.0.0.0
       "
 
   zksyncos:
-    image: ghcr.io/matter-labs/zksync-os-server:v0.17.1
+    image: ghcr.io/matter-labs/zksync-os-server:v0.19.0
     platform: linux/amd64
     ports:
       - '5050:3050'
@@ -61,11 +63,12 @@ services:
     entrypoint: ''
     command: ['/usr/bin/tini', '--', 'zksync-os-server', '--config', '/app/config/config.yaml']
     volumes:
-      - zksyncos_db:/app/db
+      - zksyncos_db:/db
       - ./dev/zksyncos/config.yaml:/app/config/config.yaml:ro
-      - ./dev/zksyncos/genesis.json:/app/config/genesis.json:ro
+      - ./dev/zksyncos/genesis.json:/app/local-chains/v30.2/genesis.json:ro
     depends_on:
-      - l1
+      l1:
+        condition: service_healthy
     healthcheck:
       test: ['CMD', '/usr/bin/bash', '-c', 'exec 3<>/dev/tcp/127.0.0.1/3050']
       interval: 10s
@@ -131,6 +134,8 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
       - ./dev/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./dev/grafana/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
+      - ./dev/grafana/datasources/dashboards:/etc/grafana/provisioning/dashboards/files:ro
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
@@ -228,8 +233,6 @@ services:
       BLOCKCHAIN_RPC_URL: http://zksyncos:3050
       PRIVIDIUM: 'true'
       PRIVIDIUM_PERMISSIONS_API_URL: http://host.docker.internal:8000/api
-    ports:
-      - '3040:3040'
 
   zksync-webhook-db:
     image: postgres:16-alpine
@@ -289,14 +292,16 @@ services:
     environment:
       L1_RPC_URL: http://l1:5010
       L2_RPC_URL: http://zksyncos:3050
-      PRIVATE_KEY: '0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba'
+      # Key #3 = bundler executor; Key #0 = auth-server-api deployer
+      PRIVATE_KEYS: '0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba,0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
+      BRIDGE_SPONSOR_PRIVATE_KEY: '0x7726827caac94a7f9e1b160f7ea819f172f7b6f9d2a97f992c38edeab82d4110'
     command: sh -c "corepack enable && pnpm install && pnpm tsx scripts/bridge-funds.ts"
     depends_on:
       zksyncos:
         condition: service_healthy
 
   entrypoint-deployer:
-    image: ghcr.io/foundry-rs/foundry:latest
+    image: ghcr.io/foundry-rs/foundry:v1.5.1
     entrypoint: ''
     user: 'root'
     volumes:
@@ -314,7 +319,7 @@ services:
         condition: service_completed_successfully
 
   bundler:
-    image: quay.io/matterlabs_enterprise/prividium-bundler:v1.169.1
+    image: quay.io/matterlabs_enterprise/prividium-bundler:v1.190.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -330,6 +335,45 @@ services:
       entrypoint-deployer:
         condition: service_completed_successfully
 
+  # ─── SSO infrastructure ──────────────────────────────────────────────────
+  # Extracts the contract artifacts shipped inside sso-auth-server-api into
+  # ./dev/sso-setup/contracts so sso-contracts-deployer can read them.
+  contracts-extractor:
+    image: ghcr.io/matter-labs/sso-auth-server-api:0df0643-1776120695303
+    platform: linux/amd64
+    volumes:
+      - ./dev/sso-setup/contracts:/output
+    entrypoint: ''
+    command: >
+      sh -c "
+        if [ -d /prod/auth-server-api/contracts ]; then
+          cp -r /prod/auth-server-api/contracts/. /output/
+          echo 'Extracted contract artifacts from image'
+        elif [ -f /output/WebAuthnValidator.sol/WebAuthnValidator.json ]; then
+          echo 'Using static contract artifacts (image predates Dockerfile update)'
+        else
+          echo 'ERROR: No contract artifacts found. Either rebuild the sso-auth-server-api image or restore dev/sso-setup/contracts/ from git.'
+          exit 1
+        fi
+      "
+
+  sso-contracts-deployer:
+    image: node:22-slim
+    working_dir: /app
+    volumes:
+      - ./dev/sso-setup:/app
+      - sso_setup_node_modules:/app/node_modules
+    environment:
+      L1_RPC_URL: http://l1:5010
+      RPC_URL: http://zksyncos:3050
+      CHAIN_ID: '6565'
+    command: sh -c "corepack enable && pnpm install && pnpm tsx scripts/deploy-contracts.ts"
+    depends_on:
+      entrypoint-deployer:
+        condition: service_completed_successfully
+      contracts-extractor:
+        condition: service_completed_successfully
+
 volumes:
   postgres:
   l1state:
@@ -338,3 +382,4 @@ volumes:
   grafana_data:
   zksync_webhook_db_data:
   bridge_funds_node_modules:
+  sso_setup_node_modules:
