@@ -110,10 +110,9 @@ async function hasCode(publicClient: ReturnType<typeof createPublicClient>, addr
 }
 
 function writeEnvFile(values: Record<string, string>) {
-    const content =
-        Object.entries(values)
-            .map(([k, v]) => `${k}=${v}`)
-            .join('\n') + '\n';
+    const content = `${Object.entries(values)
+        .map(([k, v]) => `${k}=${v}`)
+        .join('\n')}\n`;
     fs.writeFileSync(CONTRACTS_ENV_PATH, content);
     console.log(`\nWritten to ${CONTRACTS_ENV_PATH}`);
 }
@@ -219,7 +218,7 @@ async function main() {
     console.log(`✅ EntryPoint at: ${ENTRY_POINT_ADDRESS}`);
 
     // Deploy a sample SSO account via factory to compute the proxy bytecode hash
-    let ssoBytecodeHash = existing['DISPATCHER_SSO_BYTECODE_HASHES'] as string | undefined;
+    let ssoBytecodeHash = existing.DISPATCHER_SSO_BYTECODE_HASHES as string | undefined;
     if (!ssoBytecodeHash) {
         console.log('Computing SSO account bytecode hash via factory.deployAccount...');
         const salt = `0x${randomBytes(32).toString('hex')}` as Hex;
