@@ -303,7 +303,7 @@ services:
   entrypoint-deployer:
     image: ghcr.io/foundry-rs/foundry:v1.5.1
     entrypoint: ''
-    user: 'root'
+    user: ${ENTRYPOINT_DEPLOYER_USER:-root}
     volumes:
       - ./dev/bundler/contracts/entrypoint:/app
     working_dir: /app
@@ -319,7 +319,7 @@ services:
         condition: service_completed_successfully
 
   bundler:
-    image: quay.io/matterlabs_enterprise/prividium-bundler:v1.196.2
+    image: quay.io/matterlabs_enterprise/prividium-bundler:v1.196.3
     platform: linux/amd64
     restart: unless-stopped
     environment:
