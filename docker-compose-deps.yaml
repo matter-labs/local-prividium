@@ -250,8 +250,9 @@ services:
       retries: 10
 
   zksync-webhook-service:
-    image: quay.io/matterlabs_enterprise/webhook-service:v0.1.19
+    image: quay.io/matterlabs_enterprise/webhook-service:v0.1.28
     platform: linux/amd64
+    pull_policy: always
     init: true
     restart: unless-stopped
     depends_on:
@@ -269,10 +270,9 @@ services:
       RUST_LOG: info
       ENCRYPTION_KEY: a40c350fed393623dfaa54d93d96addcbf8ae845e4f1b6eeaeb444aa3645e800
       ENCRYPTION_KDF_SALT: zksync-webhook-service:keycipher:v2
-      PRIVIDIUM_SIGNER_KEY: ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
-      PRIVIDIUM_RPC_URL: http://host.docker.internal:5050
+      PRIVIDIUM_API_KEY: priv_sk_DEV000000000000000000000000000000000000000000000000000000WEBHOOK
+      PRIVIDIUM_RPC_URL: http://host.docker.internal:8000/rpc
       PRIVIDIUM_PERMISSIONS_API: http://host.docker.internal:8000
-      PRIVIDIUM_SIWE_DOMAIN: http://host.docker.internal:3000
       ZKSYNC_WEBHOOK_API_CORS_ALLOW_ORIGIN: http://localhost:3000
       ZKSYNC_WEBHOOK_ALLOW_HTTP_LOCALHOST: 'true'
       ZKSYNC_WEBHOOK_CHAIN_NAME: 'local_prividium'
@@ -319,7 +319,7 @@ services:
         condition: service_completed_successfully
 
   bundler:
-    image: quay.io/matterlabs_enterprise/prividium-bundler:v1.197.0
+    image: quay.io/matterlabs_enterprise/prividium-bundler:v1.198.0
     platform: linux/amd64
     restart: unless-stopped
     environment:

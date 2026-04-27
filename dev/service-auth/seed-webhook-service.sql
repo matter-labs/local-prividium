@@ -25,7 +25,14 @@ SET
 INSERT INTO roles (role_name, system_permissions, is_system_role)
 VALUES (
     'local_webhook_service_role',
-    ARRAY['check_user_read_access', 'contract_metadata_read']::text[],
+    ARRAY[
+        'check_user_read_access',
+        'contract_metadata_read',
+        'rpc_read_eth_getBlockByNumber',
+        'rpc_read_eth_getLogs',
+        'rpc_read_eth_getTransactionByHash',
+        'rpc_read_eth_getTransactionReceipt'
+    ]::text[],
     false
 )
 ON CONFLICT (role_name) DO UPDATE
