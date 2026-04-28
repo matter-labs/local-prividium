@@ -6,7 +6,7 @@ include:
 
 services:
   admin-panel:
-    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.199.0
+    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.200.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -18,10 +18,10 @@ services:
       - prividium-api
       - user-panel
     ports:
-      - "3000:3000"
+      - '3000:3000'
 
   prividium-api:
-    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.199.0
+    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.200.0
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -34,8 +34,8 @@ services:
       sso-contracts-deployer:
         condition: service_completed_successfully
     ports:
-      - "8000:8000"
-      - "9091:9091"
+      - '8000:8000'
+      - '9091:9091'
     env_file:
       - path: ./dev/sso-setup/contracts.env
         required: false
@@ -81,11 +81,7 @@ services:
       - RATE_LIMIT_WINDOW_MS=60000
       - CRYPTO_NATIVE_ADMIN_WALLETS=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "wget --quiet --tries=1 --spider http://127.0.0.1:8000/health || exit 1",
-        ]
+      test: ['CMD-SHELL', 'wget --quiet --tries=1 --spider http://127.0.0.1:8000/health || exit 1']
       interval: 10s
       timeout: 5s
       retries: 10
@@ -111,7 +107,7 @@ services:
     platform: linux/amd64
     restart: unless-stopped
     ports:
-      - "3004:3004"
+      - '3004:3004'
     volumes:
       - ./dev/sso-setup/contracts.env:/contracts.env:ro
     environment:
@@ -129,7 +125,7 @@ services:
     entrypoint:
       - /bin/sh
       - -c
-      - "set -a && . /contracts.env && set +a && exec node --experimental-wasm-modules /prod/auth-server-api/dist/index.js"
+      - 'set -a && . /contracts.env && set +a && exec node --experimental-wasm-modules /prod/auth-server-api/dist/index.js'
     depends_on:
       sso-permissions-setup:
         condition: service_completed_successfully
@@ -139,7 +135,7 @@ services:
     platform: linux/amd64
     restart: unless-stopped
     ports:
-      - "3006:3000"
+      - '3006:3000'
     volumes:
       - ./dev/sso-setup/contracts.env:/contracts.env:ro
     environment:
@@ -172,7 +168,7 @@ services:
         condition: service_started
 
   user-panel:
-    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.199.0
+    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.200.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -200,4 +196,4 @@ services:
     depends_on:
       - prividium-api
     ports:
-      - "3001:3000"
+      - '3001:3000'
