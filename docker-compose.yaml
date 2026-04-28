@@ -36,9 +36,18 @@ services:
     ports:
       - '8000:8000'
       - '9091:9091'
-    env_file:
-      - path: ./dev/sso-setup/contracts.env
-        required: false
+    volumes:
+      - ./dev/sso-setup:/sso-setup:ro
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >
+        if [ -f /sso-setup/contracts.env ]; then
+          set -a &&
+          . /sso-setup/contracts.env &&
+          set +a ;
+        fi ;
+        exec docker-entrypoint.sh pnpm start
     environment:
       - PORT=8000
       - METRICS_PORT=9091
