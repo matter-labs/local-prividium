@@ -11,9 +11,9 @@ docker compose --profile <name> up -d
 
 ## Current apps
 
-| Profile              | Port | Description                                   | Source repo                                 |
-| -------------------- | ---- | --------------------------------------------- | ------------------------------------------- |
-| `institutional-demo` | 3500 | Intraday Repo lending demo with ERC-20 tokens | prividium-institutional-demo (single-chain) |
+| Profile              | Port | Description                                   | Instructions                               |
+| -------------------- | ---- | --------------------------------------------- | ------------------------------------------ |
+| `institutional-demo` | 3500 | Intraday Repo lending demo with ERC-20 tokens | [Demo guide](./institutional-demo/DEMO.md) |
 
 ---
 
