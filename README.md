@@ -78,9 +78,9 @@ Login to the Block Explorer at **http://localhost:3010** (Be sure a wallet is as
 
 Optional demo apps can be started alongside the core stack using Docker Compose profiles:
 
-| App | Description | URL | Instructions |
-|-----|-------------|-----|--------------|
-| Intraday Repo Demo | Institutional lending demo with tokenised assets (USDC, TUST, SGD) | http://localhost:3500 | [GitHub](https://github.com/jackhamer09/prividium-institutional-demo) |
+| Profile              | Port | Description                                   | Instructions                               |
+| -------------------- | ---- | --------------------------------------------- | ------------------------------------------ |
+| `institutional-demo` | 3500 | Intraday Repo lending demo with ERC-20 tokens | [Demo guide](./institutional-demo/DEMO.md) |
 
 ```bash
 # Intraday Repo Demo
