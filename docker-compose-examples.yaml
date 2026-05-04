@@ -15,11 +15,11 @@ name: zksync-prividium-examples
 services:
   # ─── Institutional Demo (Intraday Repo) ────────────────────────────────────
   # Port: 3500  |  Profile: institutional-demo
-  # Source: https://github.com/jackhamer09/prividium-institutional-demo (single-chain branch)
+  # Source: https://github.com/matter-labs/intraday-repo-demo (single-chain branch)
 
   institutional-demo-deploy:
     profiles: [institutional-demo]
-    image: ${INSTITUTIONAL_DEMO_SETUP_IMAGE:-ghcr.io/jackhamer09/institutional-demo-setup:single-chain}
+    image: ${INSTITUTIONAL_DEMO_SETUP_IMAGE:-quay.io/matterlabs_enterprise/intraday-demo-setup:single-chain}
     pull_policy: always
     platform: linux/amd64
     command: deploy
@@ -37,7 +37,7 @@ services:
 
   institutional-demo-seed:
     profiles: [institutional-demo]
-    image: ${INSTITUTIONAL_DEMO_SETUP_IMAGE:-ghcr.io/jackhamer09/institutional-demo-setup:single-chain}
+    image: ${INSTITUTIONAL_DEMO_SETUP_IMAGE:-quay.io/matterlabs_enterprise/intraday-demo-setup:single-chain}
     pull_policy: always
     platform: linux/amd64
     command: seed
@@ -55,7 +55,7 @@ services:
 
   institutional-demo:
     profiles: [institutional-demo]
-    image: ghcr.io/jackhamer09/prividium-demo-app:single-chain
+    image: quay.io/matterlabs_enterprise/prividium-demo-app:single-chain
     pull_policy: always
     platform: linux/amd64
     restart: unless-stopped
