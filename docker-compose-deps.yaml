@@ -48,7 +48,7 @@ services:
       if [[ ! -f /home/foundry/l1state/state.json ]]; then
         gzip -dc /l1-state.json.gz > /home/foundry/l1state/state.json;
       fi
-      exec anvil --state=/home/foundry/l1state/state.json --state-interval 5 --preserve-historical-states --port 5010 --host 0.0.0.0 --block-time 0.25 --mixed-mining
+      exec anvil --state=/home/foundry/l1state/state.json --state-interval 5 --preserve-historical-states --port 5010 --host 0.0.0.0 --block-time 0.25 --mixed-mining --slots-in-an-epoch 10
       "
 
   zksyncos:
