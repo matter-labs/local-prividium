@@ -6,7 +6,7 @@ include:
 
 services:
   admin-panel:
-    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.208.1
+    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.209.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -22,7 +22,7 @@ services:
       - '3000:3000'
 
   prividium-api:
-    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.208.1
+    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.209.0
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -56,6 +56,9 @@ services:
       - SIWE_CONSUMED_NONCE_TTL_SECONDS=600
       - SIWE_CLEANUP_INTERVAL_SECONDS=60
       - SIWE_CHALLENGE_RATE_LIMIT_BYPASS_IPS=127.0.0.1,::1
+      - DEPLOYMENT_PENDING_TTL_SECONDS=3600
+      - DEPLOYMENT_ERRORED_RETENTION_SECONDS=604800
+      - DEPLOYMENT_CLEANUP_INTERVAL_SECONDS=300
       - OIDC_JWKS_URI=http://keycloak:8080/realms/prividium/protocol/openid-connect/certs
       - OIDC_JWT_AUD=prividium-client
       - OIDC_JWT_ISSUER=http://localhost:5080/realms/prividium
@@ -170,7 +173,7 @@ services:
         condition: service_started
 
   user-panel:
-    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.208.1
+    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.209.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
