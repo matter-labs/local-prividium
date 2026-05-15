@@ -6,7 +6,7 @@ include:
 
 services:
   admin-panel:
-    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.212.0
+    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.213.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -14,6 +14,7 @@ services:
       - VITE_USER_PANEL_URL=http://localhost:3001
       - VITE_EXPLORER_URL=http://localhost:3010
       - VITE_DISCLOSURE_METHODS_ENABLED=true
+      - VITE_FAUCET_ENABLED=true
       - PORT=3000
     depends_on:
       - prividium-api
@@ -22,7 +23,7 @@ services:
       - '3000:3000'
 
   prividium-api:
-    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.212.0
+    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.213.0
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -78,6 +79,13 @@ services:
       - EXTRA_PUBLIC_CODE_ADDRESSES=0x36615cf349d7f6344891b1e7ca7c72883f5dc049
       - BUNDLER_ENABLED=true
       - BUNDLER_RPC_URL=http://bundler:4337
+      - FAUCET_ENABLED=true
+      - FAUCET_OPERATOR_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+      - FAUCET_CLAIM_AMOUNT_WEI=50000000000000000
+      - FAUCET_COOLDOWN_SECONDS=86400 # 24 hours
+      - FAUCET_STALE_PENDING_SECONDS=3600 # 1 hour
+      - FAUCET_MAX_DAILY_SPEND_WEI=5000000000000000000 # 5 eth
+      - FAUCET_TX_TIMEOUT_MS=30000
       - RATE_LIMIT_ENABLED=false
       - RATE_LIMIT_AUTH_MAX=100
       - RATE_LIMIT_PUBLIC_MAX=300
@@ -173,7 +181,7 @@ services:
         condition: service_started
 
   user-panel:
-    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.212.0
+    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.213.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -187,6 +195,7 @@ services:
       - VITE_CHAIN_ID=6565
       - VITE_CHAIN_NAME=Prividium™ Local
       - VITE_WALLETS_ENABLED=true
+      - VITE_FAUCET_ENABLED=true
       - VITE_BRIDGING_ENABLED=true
       - VITE_WITHDRAWAL_ENABLED=true
       - VITE_L1_RPC_URL=http://localhost:5010
