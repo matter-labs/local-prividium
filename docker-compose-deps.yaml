@@ -31,6 +31,7 @@ services:
 
   l1:
     image: ghcr.io/foundry-rs/foundry:v1.5.1
+    restart: unless-stopped
     volumes:
       - ./dev/zksyncos/l1-state.json.gz:/l1-state.json.gz:ro
       - l1state:/home/foundry/l1state
@@ -48,11 +49,12 @@ services:
       if [[ ! -f /home/foundry/l1state/state.json ]]; then
         gzip -dc /l1-state.json.gz > /home/foundry/l1state/state.json;
       fi
-      exec anvil --state=/home/foundry/l1state/state.json --state-interval 5 --preserve-historical-states --port 5010 --host 0.0.0.0 --block-time 0.25 --mixed-mining
+      exec anvil --state=/home/foundry/l1state/state.json --state-interval 5 --preserve-historical-states --port 5010 --host 0.0.0.0 --block-time 12 --mixed-mining --slots-in-an-epoch 10
       "
 
   zksyncos:
     image: ghcr.io/matter-labs/zksync-os-server:v0.19.3
+    restart: unless-stopped
     platform: linux/amd64
     ports:
       - '5050:3050'
@@ -319,7 +321,7 @@ services:
         condition: service_completed_successfully
 
   bundler:
-    image: quay.io/matterlabs_enterprise/prividium-bundler:v1.201.6
+    image: quay.io/matterlabs_enterprise/prividium-bundler:v1.210.0
     platform: linux/amd64
     restart: unless-stopped
     environment:

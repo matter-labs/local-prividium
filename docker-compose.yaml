@@ -6,13 +6,14 @@ include:
 
 services:
   admin-panel:
-    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.201.6
+    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.210.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
       - VITE_PRIVIDIUM_API_URL=http://localhost:8000
       - VITE_USER_PANEL_URL=http://localhost:3001
       - VITE_EXPLORER_URL=http://localhost:3010
+      - VITE_DISCLOSURE_METHODS_ENABLED=true
       - PORT=3000
     depends_on:
       - prividium-api
@@ -21,7 +22,7 @@ services:
       - '3000:3000'
 
   prividium-api:
-    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.201.6
+    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.210.0
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -55,6 +56,9 @@ services:
       - SIWE_CONSUMED_NONCE_TTL_SECONDS=600
       - SIWE_CLEANUP_INTERVAL_SECONDS=60
       - SIWE_CHALLENGE_RATE_LIMIT_BYPASS_IPS=127.0.0.1,::1
+      - DEPLOYMENT_PENDING_TTL_SECONDS=3600
+      - DEPLOYMENT_ERRORED_RETENTION_SECONDS=604800
+      - DEPLOYMENT_CLEANUP_INTERVAL_SECONDS=300
       - OIDC_JWKS_URI=http://keycloak:8080/realms/prividium/protocol/openid-connect/certs
       - OIDC_JWT_AUD=prividium-client
       - OIDC_JWT_ISSUER=http://localhost:5080/realms/prividium
@@ -64,6 +68,7 @@ services:
       - BLOCK_EXPLORER_REDIRECT_URLS=http://localhost:3010/auth/callback
       - SWAGGER_UI_ALLOWED_ROLES=admin
       - WALLETS_API_ENABLED=true
+      - DISCLOSURE_METHODS_ENABLED=true
       - WEBAUTHN_RP_NAME=ZKsync Prividium
       - WEBAUTHN_RP_ID=localhost
       - WEBAUTHN_ORIGIN=http://localhost:3001,http://localhost:3000
@@ -168,7 +173,7 @@ services:
         condition: service_started
 
   user-panel:
-    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.201.6
+    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.210.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
