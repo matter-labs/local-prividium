@@ -6,7 +6,7 @@ include:
 
 services:
   admin-panel:
-    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.210.0
+    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.211.1
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -22,7 +22,7 @@ services:
       - '3000:3000'
 
   prividium-api:
-    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.210.0
+    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.211.1
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -63,7 +63,7 @@ services:
       - OIDC_JWT_AUD=prividium-client
       - OIDC_JWT_ISSUER=http://localhost:5080/realms/prividium
       - OIDC_ADMIN_SUBS=00000000-0000-0000-0000-000000000001
-      - CORS_CACHE_DURATION_MS=600000
+      - CORS_CACHE_DURATION_MS=60000
       - ADMIN_PANEL_REDIRECT_URLS=http://localhost:3000/callback
       - BLOCK_EXPLORER_REDIRECT_URLS=http://localhost:3010/auth/callback
       - SWAGGER_UI_ALLOWED_ROLES=admin
@@ -173,7 +173,7 @@ services:
         condition: service_started
 
   user-panel:
-    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.210.0
+    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.211.1
     platform: linux/amd64
     restart: unless-stopped
     environment:
