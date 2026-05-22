@@ -6,7 +6,7 @@ include:
 
 services:
   admin-panel:
-    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.216.7
+    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.216.9
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -24,7 +24,7 @@ services:
       - '3000:3000'
 
   prividium-api:
-    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.216.7
+    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.216.9
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -78,7 +78,7 @@ services:
       - USER_PANEL_URL=http://localhost:3001
       - WEBAUTHN_REQUIRE_USER_VERIFICATION=false
       - WEBAUTHN_AUTHENTICATOR_ATTACHMENT=platform
-      - EXTRA_PUBLIC_CODE_ADDRESSES=0x36615cf349d7f6344891b1e7ca7c72883f5dc049
+      - EXTRA_PUBLIC_CODE_ADDRESSES=0x36615Cf349d7F6344891B1e7CA7C72883F5dc049
       - BUNDLER_ENABLED=true
       - BUNDLER_RPC_URL=http://bundler:4337
       - FAUCET_ENABLED=true
@@ -183,7 +183,7 @@ services:
         condition: service_started
 
   user-panel:
-    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.216.7
+    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.216.9
     platform: linux/amd64
     restart: unless-stopped
     environment:
