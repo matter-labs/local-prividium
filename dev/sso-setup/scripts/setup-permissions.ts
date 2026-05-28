@@ -161,8 +161,8 @@ async function main() {
             const addrBuf = addr(address);
 
             await sql`
-        INSERT INTO contracts (contract_address, name, description, abi, disclose_bytecode, disclose_erc_20_total_supply, is_system_contract)
-        VALUES (${addrBuf}, ${name}, ${description}, ${JSON.stringify(abi)}, false, false, false)
+        INSERT INTO contracts (contract_address, name, description, abi, disclose_bytecode, disclose_erc_20_total_supply, is_system_contract, disclosure_start_block)
+        VALUES (${addrBuf}, ${name}, ${description}, ${JSON.stringify(abi)}, false, false, false, 0)
         ON CONFLICT (contract_address) DO NOTHING
       `;
 
