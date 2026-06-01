@@ -118,7 +118,7 @@ services:
         condition: service_healthy
 
   auth-server-api:
-    image: ghcr.io/matter-labs/sso-auth-server-api:0df0643-1776120695303
+    image: ghcr.io/matter-labs/sso-auth-server-api:996fbd7-1780065236920
     platform: linux/amd64
     restart: unless-stopped
     ports:
@@ -146,7 +146,7 @@ services:
         condition: service_completed_successfully
 
   auth-server:
-    image: ghcr.io/matter-labs/sso-auth-server:0df0643-1776120704363
+    image: ghcr.io/matter-labs/sso-auth-server:996fbd7-1780065232708
     platform: linux/amd64
     restart: unless-stopped
     ports:
