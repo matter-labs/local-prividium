@@ -6,7 +6,7 @@ include:
 
 services:
   admin-panel:
-    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.221.0
+    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.222.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -24,7 +24,7 @@ services:
       - '3000:3000'
 
   prividium-api:
-    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.221.0
+    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.222.0
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -93,6 +93,7 @@ services:
       - RATE_LIMIT_PUBLIC_MAX=300
       - RATE_LIMIT_USER_MAX=300
       - RATE_LIMIT_RPC_MAX=1000
+      - RATE_LIMIT_M2M_MAX=1000
       - RATE_LIMIT_WINDOW_MS=60000
       - CRYPTO_NATIVE_ADMIN_WALLETS=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
     healthcheck:
@@ -183,7 +184,7 @@ services:
         condition: service_started
 
   user-panel:
-    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.221.0
+    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.222.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
