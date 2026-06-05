@@ -321,7 +321,7 @@ services:
         condition: service_completed_successfully
 
   bundler:
-    image: quay.io/matterlabs_enterprise/prividium-bundler:v1.216.9
+    image: quay.io/matterlabs_enterprise/prividium-bundler:v1.222.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -341,7 +341,7 @@ services:
   # Extracts the contract artifacts shipped inside sso-auth-server-api into
   # ./dev/sso-setup/contracts so sso-contracts-deployer can read them.
   contracts-extractor:
-    image: ghcr.io/matter-labs/sso-auth-server-api:0df0643-1776120695303
+    image: ghcr.io/matter-labs/sso-auth-server-api:996fbd7-1780065236920
     platform: linux/amd64
     volumes:
       - ./dev/sso-setup/contracts:/output
