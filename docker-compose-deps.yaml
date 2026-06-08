@@ -53,13 +53,13 @@ services:
       "
 
   zksyncos:
-    image: ghcr.io/matter-labs/zksync-os-server:v0.19.3
+    image: ghcr.io/matter-labs/zksync-os-server:v0.20.4
     restart: unless-stopped
     platform: linux/amd64
     ports:
       - '5050:3050'
     environment:
-      GENERAL_L1_RPC_URL: 'http://l1:5010'
+      L1_PROVIDER_RPC_URL: 'http://l1:5010'
     user: 'root'
     working_dir: '/app'
     entrypoint: ''
