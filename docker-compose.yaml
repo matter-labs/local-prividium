@@ -6,7 +6,7 @@ include:
 
 services:
   admin-panel:
-    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.223.0
+    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.224.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -24,7 +24,7 @@ services:
       - '3000:3000'
 
   prividium-api:
-    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.223.0
+    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.224.0
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -97,6 +97,11 @@ services:
       - RATE_LIMIT_M2M_MAX=1000
       - RATE_LIMIT_WINDOW_MS=60000
       - CRYPTO_NATIVE_ADMIN_WALLETS=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+      # Allowlist of dev EOAs that bypass the well-known dev wallet block.
+      # Production deployments MUST leave this empty. The addresses below are
+      # anvil defaults used by seeds (dev/wallet-auth/seed-wallet-auth.sql) and
+      # E2E fixtures (packages/e2e-tests/src/utils/constants.ts).
+      - KNOWN_DEV_WALLETS_ALLOWLIST=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266,0x70997970C51812dc3A010C7d01b50e0d17dc79C8,0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC,0x90F79bf6EB2c4f870365E785982E1f101E93b906,0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65,0xa0Ee7A142d267C1f36714E4a8F75612F20a79720
     healthcheck:
       test: ['CMD-SHELL', 'wget --quiet --tries=1 --spider http://127.0.0.1:8000/health || exit 1']
       interval: 10s
@@ -185,7 +190,7 @@ services:
         condition: service_started
 
   user-panel:
-    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.223.0
+    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.224.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
