@@ -69,12 +69,11 @@ VALUES (
 ON CONFLICT (key_hash) DO UPDATE
 SET expires_at = EXCLUDED.expires_at;
 
--- 5. IP whitelist (localhost)
+-- 5. IP whitelist (loopback + all RFC1918 private LAN ranges)
 INSERT INTO api_keys_ip_whitelist (id, ip_address, description, m2m_app_id)
-VALUES (
-    'ipw_local_webhook_0001',
-    '127.0.0.1',
-    'localhost',
-    'm2m_local_webhook_0001'
-)
+VALUES
+    ('ipw_local_webhook_0001', '127.0.0.1', 'localhost', 'm2m_local_webhook_0001'),
+    ('ipw_local_webhook_0002', '10.0.0.0/8', 'RFC1918 private (10.0.0.0/8)', 'm2m_local_webhook_0001'),
+    ('ipw_local_webhook_0003', '172.16.0.0/12', 'RFC1918 private (172.16.0.0/12)', 'm2m_local_webhook_0001'),
+    ('ipw_local_webhook_0004', '192.168.0.0/16', 'RFC1918 private (192.168.0.0/16)', 'm2m_local_webhook_0001')
 ON CONFLICT (m2m_app_id, ip_address) DO NOTHING;
