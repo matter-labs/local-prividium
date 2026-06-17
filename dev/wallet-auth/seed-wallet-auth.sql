@@ -4,7 +4,7 @@
 -- Insert roles if they don't exist
 INSERT INTO roles (role_name, system_permissions, is_system_role)
 VALUES
-    ('admin', '{contract_deployment,full_sequencer_rpc_access,full_read_access,admin_read}', true),
+    ('admin', '{contract_deployment,full_sequencer_rpc_access,full_read_access,admin_read,admin_write}', true),
     ('user', '{}', false)
 ON CONFLICT (role_name) DO NOTHING;
 

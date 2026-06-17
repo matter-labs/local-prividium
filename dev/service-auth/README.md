@@ -12,7 +12,7 @@ The seed script creates one service in the `services` table:
 
 | Field       | Value                                                                 |
 | ----------- | --------------------------------------------------------------------- |
-| ID          | `svc_local_webhook_0001`                                              |
+| ID          | `svc_local_webhook_001`                                               |
 | Name        | `Local Webhook Service`                                               |
 | Public Key  | `0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266`                          |
 | Description | `Seeded local development service account for zksync-webhook-service` |
