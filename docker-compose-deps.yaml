@@ -2,7 +2,7 @@ name: zksync-prividium-db
 
 services:
   postgres:
-    image: postgres:15
+    image: postgres:18
     restart: unless-stopped
     ports:
       - 127.0.0.1:5432:5432
@@ -10,6 +10,9 @@ services:
       - postgres:/var/lib/postgresql/data
     environment:
       POSTGRES_PASSWORD: postgres
+      # postgres:18 moved the default PGDATA to a version-specific subdir; pin it to the
+      # mount path so the existing volume layout keeps working.
+      PGDATA: /var/lib/postgresql/data
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U postgres']
       interval: 10s
@@ -237,12 +240,13 @@ services:
       PRIVIDIUM_PERMISSIONS_API_URL: http://host.docker.internal:8000/api
 
   zksync-webhook-db:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: zksync_webhook_db
+      PGDATA: /var/lib/postgresql/data
     volumes:
       - zksync_webhook_db_data:/var/lib/postgresql/data
     healthcheck:
