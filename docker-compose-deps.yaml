@@ -52,7 +52,12 @@ services:
       if [[ ! -f /home/foundry/l1state/state.json ]]; then
         gzip -dc /l1-state.json.gz > /home/foundry/l1state/state.json;
       fi
-      exec anvil --state=/home/foundry/l1state/state.json --state-interval 5 --preserve-historical-states --port 5010 --host 0.0.0.0 --block-time 12 --mixed-mining --slots-in-an-epoch 10
+      # zksync-os-server bisects L1 history with historical eth_call on every startup, so it
+      # only restarts cleanly while anvil's snapshot window (~500 in-memory + this cap) still
+      # reaches back to the seed-era blocks: with 512 that is ~2-4h of chain uptime. Past that,
+      # zksyncos panic-loops with BlockOutOfRangeError until the l1state and zksyncos_db
+      # volumes are wiped together. Raising the cap extends the window at ~24MB/snapshot.
+      exec anvil --state=/home/foundry/l1state/state.json --state-interval 60 --preserve-historical-states --max-persisted-states 512 --port 5010 --host 0.0.0.0 --block-time 12 --mixed-mining --slots-in-an-epoch 10
       "
 
   zksyncos:
