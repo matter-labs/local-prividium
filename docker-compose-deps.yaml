@@ -106,6 +106,8 @@ services:
       - --import-realm
     volumes:
       - ./dev/keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+      # Second realm = a sample organization's own identity provider, for the local multi-org demo.
+      - ./dev/keycloak/acme-realm-export.json:/opt/keycloak/data/import/acme-realm-export.json:ro
     healthcheck:
       test: ['CMD-SHELL', 'exec 3<>/dev/tcp/127.0.0.1/8080;echo -e "GET /health/ready HTTP/1.1\r\nhost: 127.0.0.1:8080\r\nConnection: close\r\n\r\n" >&3;if [ $? -eq 0 ]; then echo "Healthcheck Successful";exit 0;else echo "Healthcheck Failed";exit 1;fi;']
       interval: 10s
@@ -330,7 +332,7 @@ services:
         condition: service_completed_successfully
 
   bundler:
-    image: quay.io/matterlabs_enterprise/prividium-bundler:v1.240.0
+    image: quay.io/matterlabs_enterprise/prividium-bundler:v1.241.0
     platform: linux/amd64
     restart: unless-stopped
     environment:

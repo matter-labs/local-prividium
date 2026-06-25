@@ -43,6 +43,37 @@ and are immutable, providing secure user identification.
 The `admin@local.dev` user is automatically granted admin privileges when their UUID is listed in the `OIDC_ADMIN_SUBS`
 environment variable.
 
+## Multi-organization demo
+
+A second realm, `acme` (`acme-realm-export.json`), stands in for an organization's own identity provider so the
+multi-org login flow can be exercised end-to-end locally. Where production resolves the organization from the `X-Org-Id`
+subdomain header, local dev selects it with a `?org=<id>` query parameter on the user panel.
+
+The demo organization, its OIDC provider (the `acme` realm) and a pending org admin are seeded automatically when the
+dev stack starts, with `MULTI_ORG_ENABLED` on by default in dev: `pnpm dev` seeds them as part of its database seed
+step, and the fully-dockerized `docker compose` stack seeds them from its own setup container. To re-seed manually from
+the host (`dev/sso-setup` is a standalone project, not a workspace package, so run it with `-C`, not `--filter`):
+
+```bash
+pnpm -C dev/sso-setup setup-multi-org-demo
+```
+
+The manual command targets the host Keycloak (`http://localhost:5080`) by default, matching the `pnpm dev` setup, so no
+`KEYCLOAK_URL` override is needed.
+
+Then open <http://localhost:3001/?org=acme> and sign in as `admin@acme.local` / `password`. The first sign-in routes to
+the `acme` realm, creates the user bound to the Acme organization, and promotes the pre-seeded pending admin to
+`org_admin`. Visiting `?org=` (empty) clears the selection back to the zone provider.
+
+The realm also ships a regular user, `member@acme.local` / `password`, with **no** pending-admin record. Signing in as
+that user exercises the other branch of the bootstrap: it is auto-provisioned as a plain organization member
+(`organizationId = acme`, `roles = []`) rather than an org admin — the common case for org users.
+
+| Realm  | Client        | User              | Role on first login | sub                                  |
+| ------ | ------------- | ----------------- | ------------------- | ------------------------------------ |
+| `acme` | `acme-client` | admin@acme.local  | `org_admin`         | 10000000-0000-0000-0000-000000000001 |
+| `acme` | `acme-client` | member@acme.local | _(none)_            | 10000000-0000-0000-0000-000000000002 |
+
 ## Starting Keycloak
 
 Keycloak starts automatically with other dependencies:
