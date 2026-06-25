@@ -61,7 +61,7 @@ services:
       "
 
   zksyncos:
-    image: ghcr.io/matter-labs/zksync-os-server:v0.20.4
+    image: ghcr.io/matter-labs/zksync-os-server:v0.20.7
     restart: unless-stopped
     platform: linux/amd64
     ports:
