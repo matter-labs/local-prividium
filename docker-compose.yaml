@@ -6,13 +6,11 @@ include:
 
 services:
   admin-panel:
-    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.242.0
+    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.243.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
       - VITE_PRIVIDIUM_API_URL=http://localhost:8000
-      - VITE_USER_PANEL_URL=http://localhost:3001
-      - VITE_EXPLORER_URL=http://localhost:3010
       - VITE_DISCLOSURE_METHODS_ENABLED=true
       - VITE_FAUCET_ENABLED=true
       - VITE_TENANTS_ENABLED=false
@@ -24,7 +22,7 @@ services:
       - '3000:3000'
 
   prividium-api:
-    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.242.0
+    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.243.0
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -98,6 +96,14 @@ services:
       - RATE_LIMIT_M2M_MAX=1000
       - RATE_LIMIT_WINDOW_MS=60000
       - CRYPTO_NATIVE_ADMIN_WALLETS=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+      - PRIVIDIUM_API_URL=http://localhost:8000
+      - CHAIN_NAME=Prividium™ Local
+      - NATIVE_TOKEN_NAME=Ether
+      - NATIVE_TOKEN_SYMBOL=ETH
+      - NATIVE_TOKEN_DECIMALS=18
+      - BLOCK_EXPLORER_URL=http://localhost:3010
+      - L1_CHAIN_ID=31337
+      - L1_CHAIN_NAME=Anvil Localhost
       # Allowlist of dev EOAs that bypass the well-known dev wallet block.
       # Production deployments MUST leave this empty. The addresses below are
       # anvil defaults used by seeds (dev/wallet-auth/seed-wallet-auth.sql) and
@@ -193,7 +199,7 @@ services:
         condition: service_started
 
   user-panel:
-    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.242.0
+    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.243.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -204,17 +210,12 @@ services:
       - VITE_OIDC_BUTTON_TEXT=Sign in with Keycloak
       - VITE_ADMIN_PANEL_REDIRECT_URI=http://localhost:3000/callback
       - VITE_AUTH_METHODS=oidc,crypto_native
-      - VITE_CHAIN_ID=6565
-      - VITE_CHAIN_NAME=Prividium™ Local
       - VITE_WALLETS_ENABLED=true
       - VITE_FAUCET_ENABLED=true
       - VITE_BRIDGING_ENABLED=true
       - VITE_WITHDRAWAL_ENABLED=true
       - VITE_L1_RPC_URL=http://localhost:5010
-      - VITE_L1_CHAIN_ID=31337
-      - VITE_L1_CHAIN_NAME=Anvil Localhost
       - VITE_PRIVIDIUM_API_URL=http://localhost:8000
-      - VITE_EXPLORER_URL=http://localhost:3010
       - VITE_ADMIN_PANEL_URL=http://localhost:3000
       - VITE_REOWN_PROJECT_ID=
 
