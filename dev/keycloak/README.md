@@ -62,8 +62,9 @@ The manual command targets the host Keycloak (`http://localhost:5080`) by defaul
 `KEYCLOAK_URL` override is needed.
 
 Then open <http://localhost:3001/?org=acme> and sign in as `admin@acme.local` / `password`. The first sign-in routes to
-the `acme` realm, creates the user bound to the Acme organization, and promotes the pre-seeded pending admin to
-`org_admin`. Visiting `?org=` (empty) clears the selection back to the zone provider.
+the `acme` realm, creates the user bound to the Acme organization, and promotes the pre-seeded pending admin to the
+org's admin role (`Admin(acme)`, carrying `admin_read`/`admin_write`). Visiting `?org=` (empty) clears the selection
+back to the zone provider.
 
 The realm also ships a regular user, `member@acme.local` / `password`, with **no** pending-admin record. Signing in as
 that user exercises the other branch of the bootstrap: it is auto-provisioned as a plain organization member
@@ -71,7 +72,7 @@ that user exercises the other branch of the bootstrap: it is auto-provisioned as
 
 | Realm  | Client        | User              | Role on first login | sub                                  |
 | ------ | ------------- | ----------------- | ------------------- | ------------------------------------ |
-| `acme` | `acme-client` | admin@acme.local  | `org_admin`         | 10000000-0000-0000-0000-000000000001 |
+| `acme` | `acme-client` | admin@acme.local  | `Admin(acme)`       | 10000000-0000-0000-0000-000000000001 |
 | `acme` | `acme-client` | member@acme.local | _(none)_            | 10000000-0000-0000-0000-000000000002 |
 
 ## Starting Keycloak

@@ -2,7 +2,7 @@
  * Seeds a sample organization so the multi-org login flow can be exercised locally:
  *   1. An organization ("Acme Corp") with branding.
  *   2. Its OIDC provider, pointing at the `acme` Keycloak realm (dev/keycloak/acme-realm-export.json).
- *   3. A pending-admin record for the realm's admin user, who becomes `org_admin` on first sign-in.
+ *   3. A pending-admin record for the realm's admin user, who becomes the org's admin on first sign-in.
  *
  * This stands in for the operator UI (design-doc A7) that is not built yet. Run it after the stack is
  * up and migrated, with MULTI_ORG_ENABLED=true on the permissions-api. Then open:
@@ -76,7 +76,7 @@ async function main() {
         console.log(`✅ Pending admin sub: ${PENDING_ADMIN_SUB} (admin@acme.local)`);
 
         console.log(`\n✅ Multi-org demo seeded. Open http://localhost:3001/?org=${ORG_ID} and sign in as`);
-        console.log('   admin@acme.local / password — the first login bootstraps the org_admin.');
+        console.log('   admin@acme.local / password — the first login bootstraps the org admin.');
     } finally {
         await sql.end();
     }
