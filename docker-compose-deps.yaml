@@ -293,8 +293,8 @@ services:
     extra_hosts:
       - 'host.docker.internal:host-gateway'
     ports:
-      - '8080:8080'
-      - '8081:8081'
+      - '127.0.0.1:8080:8080'
+      - '127.0.0.1:8081:8081'
 
   bridge-funds:
     image: node:22-slim
@@ -332,7 +332,7 @@ services:
         condition: service_completed_successfully
 
   bundler:
-    image: quay.io/matterlabs_enterprise/prividium-bundler:v1.247.1
+    image: quay.io/matterlabs_enterprise/prividium-bundler:v1.248.0
     platform: linux/amd64
     restart: unless-stopped
     environment:

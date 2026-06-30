@@ -6,13 +6,14 @@ include:
 
 services:
   admin-panel:
-    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.247.1
+    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.248.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
       - VITE_PRIVIDIUM_API_URL=http://localhost:8000
       - VITE_DISCLOSURE_METHODS_ENABLED=true
       - VITE_FAUCET_ENABLED=true
+      - VITE_WEBHOOKS_ENABLED=true
       - VITE_TENANTS_ENABLED=false
       - PORT=3000
     depends_on:
@@ -22,7 +23,7 @@ services:
       - '3000:3000'
 
   prividium-api:
-    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.247.1
+    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.248.0
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -81,6 +82,7 @@ services:
       - EXTRA_PUBLIC_CODE_ADDRESSES=0x36615Cf349d7F6344891B1e7CA7C72883F5dc049
       - BUNDLER_ENABLED=true
       - BUNDLER_RPC_URL=http://bundler:4337
+      - WEBHOOK_API_URL=http://zksync-webhook-service:8081
       - FAUCET_ENABLED=true
       - FAUCET_OPERATOR_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
       - FAUCET_CLAIM_AMOUNT_WEI=50000000000000000
@@ -199,7 +201,7 @@ services:
         condition: service_started
 
   user-panel:
-    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.247.1
+    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.248.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
