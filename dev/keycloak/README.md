@@ -75,6 +75,22 @@ that user exercises the other branch of the bootstrap: it is auto-provisioned as
 | `acme` | `acme-client` | admin@acme.local  | `Admin(acme)`       | 10000000-0000-0000-0000-000000000001 |
 | `acme` | `acme-client` | member@acme.local | _(none)_            | 10000000-0000-0000-0000-000000000002 |
 
+### Testing via the SDK popup
+
+A dApp using the `prividium` SDK can target the demo organization by setting `org` when it creates the chain:
+
+```ts
+const prividium = createPrividiumChain({
+  // ...existing config (clientId, chain, authBaseUrl, prividiumApiBaseUrl, redirectUrl)
+  org: 'acme'
+});
+```
+
+`prividium.authorize(...)` then opens the popup against the `acme` org — same `?org=acme` branding and identity-provider
+routing as visiting the user panel directly. The acme demo org is seeded automatically by the dev stack (see above), so
+no manual step is needed for SDK testing. The `org` option is for local development/testing only; in production the
+organization is determined by the deployment subdomain.
+
 ## Starting Keycloak
 
 Keycloak starts automatically with other dependencies:
