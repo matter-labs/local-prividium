@@ -5,7 +5,8 @@
     "type": "module",
     "scripts": {
         "deploy-contracts": "tsx scripts/deploy-contracts.ts",
-        "setup-permissions": "tsx scripts/setup-permissions.ts"
+        "setup-permissions": "tsx scripts/setup-permissions.ts",
+        "setup-multi-org-demo": "tsx scripts/setup-multi-org-demo.ts"
     },
     "dependencies": {
         "@matterlabs/zksync-js": "^0.0.2",

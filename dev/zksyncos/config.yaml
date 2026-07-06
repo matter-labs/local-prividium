@@ -11,6 +11,7 @@ l1_sender:
   poll_interval: 100ms
 l1_watcher:
   poll_interval: 100ms
+  finalized_poll_interval: 100ms
   confirmations: 0
 batcher:
   batch_timeout: 1s
