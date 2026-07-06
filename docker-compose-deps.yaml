@@ -93,9 +93,10 @@ services:
     environment:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
+      # Pin the JVM heap; Keycloak otherwise sizes it to ~70% of host RAM.
+      JAVA_OPTS_KC_HEAP: '-Xms64m -Xmx512m'
       KC_HTTP_RELATIVE_PATH: /
       KC_HEALTH_ENABLED: 'true'
-      KC_METRICS_ENABLED: 'true'
       KC_HTTP_ENABLED: 'true'
       KC_HOSTNAME_STRICT: 'false'
       KC_HOSTNAME_STRICT_HTTPS: 'false'
