@@ -6,15 +6,14 @@ include:
 
 services:
   admin-panel:
-    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.235.1
+    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.257.3
     platform: linux/amd64
     restart: unless-stopped
     environment:
       - VITE_PRIVIDIUM_API_URL=http://localhost:8000
-      - VITE_USER_PANEL_URL=http://localhost:3001
-      - VITE_EXPLORER_URL=http://localhost:3010
       - VITE_DISCLOSURE_METHODS_ENABLED=true
       - VITE_FAUCET_ENABLED=true
+      - VITE_WEBHOOKS_ENABLED=true
       - VITE_TENANTS_ENABLED=false
       - PORT=3000
     depends_on:
@@ -24,7 +23,7 @@ services:
       - '3000:3000'
 
   prividium-api:
-    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.235.1
+    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.257.3
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -72,7 +71,7 @@ services:
       - WALLETS_API_ENABLED=true
       - TENANTS_ENABLED=false
       - DISCLOSURE_METHODS_ENABLED=true
-      - MULTI_ORG_ENABLED=false
+      - MULTI_ORG_ENABLED=true
       - MAX_ORGANIZATIONS=100
       - WEBAUTHN_RP_NAME=ZKsync Prividium
       - WEBAUTHN_RP_ID=localhost
@@ -83,6 +82,7 @@ services:
       - EXTRA_PUBLIC_CODE_ADDRESSES=0x36615Cf349d7F6344891B1e7CA7C72883F5dc049
       - BUNDLER_ENABLED=true
       - BUNDLER_RPC_URL=http://bundler:4337
+      - WEBHOOK_API_URL=http://zksync-webhook-service:8081
       - FAUCET_ENABLED=true
       - FAUCET_OPERATOR_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
       - FAUCET_CLAIM_AMOUNT_WEI=50000000000000000
@@ -98,6 +98,14 @@ services:
       - RATE_LIMIT_M2M_MAX=1000
       - RATE_LIMIT_WINDOW_MS=60000
       - CRYPTO_NATIVE_ADMIN_WALLETS=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+      - PRIVIDIUM_API_URL=http://localhost:8000
+      - CHAIN_NAME=Prividium™ Local
+      - NATIVE_TOKEN_NAME=Ether
+      - NATIVE_TOKEN_SYMBOL=ETH
+      - NATIVE_TOKEN_DECIMALS=18
+      - BLOCK_EXPLORER_URL=http://localhost:3010
+      - L1_CHAIN_ID=31337
+      - L1_CHAIN_NAME=Anvil Localhost
       # Allowlist of dev EOAs that bypass the well-known dev wallet block.
       # Production deployments MUST leave this empty. The addresses below are
       # anvil defaults used by seeds (dev/wallet-auth/seed-wallet-auth.sql) and
@@ -116,9 +124,13 @@ services:
     volumes:
       - ./dev/sso-setup:/app
       - sso_setup_node_modules:/app/node_modules
+      # Shared multi-org seed fixture; setup-multi-org-demo.ts reads it at ../../multi-org (→ /multi-org).
+      - ./dev/multi-org/seed-multi-org-demo.sql:/multi-org/seed-multi-org-demo.sql:ro
     environment:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/prividium_api
-    command: sh -c "corepack enable && pnpm install && pnpm tsx scripts/setup-permissions.ts"
+      # In-network Keycloak URL the API fetches the acme realm's JWKS from (host port won't resolve here).
+      KEYCLOAK_URL: http://keycloak:8080
+    command: sh -c "corepack enable && pnpm install && pnpm tsx scripts/setup-permissions.ts && pnpm tsx scripts/setup-multi-org-demo.ts"
     depends_on:
       sso-contracts-deployer:
         condition: service_completed_successfully
@@ -191,7 +203,7 @@ services:
         condition: service_started
 
   user-panel:
-    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.235.1
+    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.257.3
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -202,17 +214,12 @@ services:
       - VITE_OIDC_BUTTON_TEXT=Sign in with Keycloak
       - VITE_ADMIN_PANEL_REDIRECT_URI=http://localhost:3000/callback
       - VITE_AUTH_METHODS=oidc,crypto_native
-      - VITE_CHAIN_ID=6565
-      - VITE_CHAIN_NAME=Prividium™ Local
       - VITE_WALLETS_ENABLED=true
       - VITE_FAUCET_ENABLED=true
       - VITE_BRIDGING_ENABLED=true
       - VITE_WITHDRAWAL_ENABLED=true
       - VITE_L1_RPC_URL=http://localhost:5010
-      - VITE_L1_CHAIN_ID=31337
-      - VITE_L1_CHAIN_NAME=Anvil Localhost
       - VITE_PRIVIDIUM_API_URL=http://localhost:8000
-      - VITE_EXPLORER_URL=http://localhost:3010
       - VITE_ADMIN_PANEL_URL=http://localhost:3000
       - VITE_REOWN_PROJECT_ID=
 

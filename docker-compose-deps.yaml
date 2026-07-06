@@ -2,7 +2,7 @@ name: zksync-prividium-db
 
 services:
   postgres:
-    image: postgres:15
+    image: postgres:18
     restart: unless-stopped
     ports:
       - 127.0.0.1:5432:5432
@@ -10,6 +10,9 @@ services:
       - postgres:/var/lib/postgresql/data
     environment:
       POSTGRES_PASSWORD: postgres
+      # postgres:18 moved the default PGDATA to a version-specific subdir; pin it to the
+      # mount path so the existing volume layout keeps working.
+      PGDATA: /var/lib/postgresql/data
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U postgres']
       interval: 10s
@@ -49,11 +52,16 @@ services:
       if [[ ! -f /home/foundry/l1state/state.json ]]; then
         gzip -dc /l1-state.json.gz > /home/foundry/l1state/state.json;
       fi
-      exec anvil --state=/home/foundry/l1state/state.json --state-interval 5 --preserve-historical-states --port 5010 --host 0.0.0.0 --block-time 12 --mixed-mining --slots-in-an-epoch 10
+      # zksync-os-server bisects L1 history with historical eth_call on every startup, so it
+      # only restarts cleanly while anvil's snapshot window (~500 in-memory + this cap) still
+      # reaches back to the seed-era blocks: with 512 that is ~2-4h of chain uptime. Past that,
+      # zksyncos panic-loops with BlockOutOfRangeError until the l1state and zksyncos_db
+      # volumes are wiped together. Raising the cap extends the window at ~24MB/snapshot.
+      exec anvil --state=/home/foundry/l1state/state.json --state-interval 60 --preserve-historical-states --max-persisted-states 512 --port 5010 --host 0.0.0.0 --block-time 12 --mixed-mining --slots-in-an-epoch 10
       "
 
   zksyncos:
-    image: ghcr.io/matter-labs/zksync-os-server:v0.20.4
+    image: ghcr.io/matter-labs/zksync-os-server:v0.20.8
     restart: unless-stopped
     platform: linux/amd64
     ports:
@@ -98,6 +106,8 @@ services:
       - --import-realm
     volumes:
       - ./dev/keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+      # Second realm = a sample organization's own identity provider, for the local multi-org demo.
+      - ./dev/keycloak/acme-realm-export.json:/opt/keycloak/data/import/acme-realm-export.json:ro
     healthcheck:
       test: ['CMD-SHELL', 'exec 3<>/dev/tcp/127.0.0.1/8080;echo -e "GET /health/ready HTTP/1.1\r\nhost: 127.0.0.1:8080\r\nConnection: close\r\n\r\n" >&3;if [ $? -eq 0 ]; then echo "Healthcheck Successful";exit 0;else echo "Healthcheck Failed";exit 1;fi;']
       interval: 10s
@@ -237,12 +247,13 @@ services:
       PRIVIDIUM_PERMISSIONS_API_URL: http://host.docker.internal:8000/api
 
   zksync-webhook-db:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: zksync_webhook_db
+      PGDATA: /var/lib/postgresql/data
     volumes:
       - zksync_webhook_db_data:/var/lib/postgresql/data
     healthcheck:
@@ -282,8 +293,8 @@ services:
     extra_hosts:
       - 'host.docker.internal:host-gateway'
     ports:
-      - '8080:8080'
-      - '8081:8081'
+      - '127.0.0.1:8080:8080'
+      - '127.0.0.1:8081:8081'
 
   bridge-funds:
     image: node:22-slim
@@ -321,7 +332,7 @@ services:
         condition: service_completed_successfully
 
   bundler:
-    image: quay.io/matterlabs_enterprise/prividium-bundler:v1.235.1
+    image: quay.io/matterlabs_enterprise/prividium-bundler:v1.257.3
     platform: linux/amd64
     restart: unless-stopped
     environment:
