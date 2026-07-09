@@ -6,12 +6,12 @@ include:
 
 services:
   admin-panel:
-    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.260.2
+    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.260.3
     platform: linux/amd64
     restart: unless-stopped
     environment:
       - VITE_PRIVIDIUM_API_URL=http://localhost:8000
-      - VITE_DISCLOSURE_METHODS_ENABLED=true
+      - VITE_DISCLOSURE_METHODS_ENABLED=false
       - VITE_FAUCET_ENABLED=true
       - VITE_WEBHOOKS_ENABLED=true
       - VITE_TENANTS_ENABLED=false
@@ -23,7 +23,7 @@ services:
       - '3000:3000'
 
   prividium-api:
-    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.260.2
+    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.260.3
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -70,7 +70,7 @@ services:
       - SWAGGER_UI_ALLOWED_ROLES=admin
       - WALLETS_API_ENABLED=true
       - TENANTS_ENABLED=false
-      - DISCLOSURE_METHODS_ENABLED=true
+      - DISCLOSURE_METHODS_ENABLED=false
       - MULTI_ORG_ENABLED=true
       - MAX_ORGANIZATIONS=100
       - WEBAUTHN_RP_NAME=ZKsync Prividium
@@ -203,7 +203,7 @@ services:
         condition: service_started
 
   user-panel:
-    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.260.2
+    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.260.3
     platform: linux/amd64
     restart: unless-stopped
     environment:
