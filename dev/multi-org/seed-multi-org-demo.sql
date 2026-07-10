@@ -25,7 +25,8 @@ VALUES (
     '__KEYCLOAK_URL__/realms/acme/protocol/openid-connect/certs',
     'acme-client',
     'acme-client',
-    'Acme Corp SSO'
+    -- Composes the same "Sign in with Keycloak" button label as the zone env default, via the org path.
+    'Keycloak'
 )
 ON CONFLICT (organization_id) DO UPDATE SET
     issuer = EXCLUDED.issuer,
