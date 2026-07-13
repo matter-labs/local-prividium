@@ -6,7 +6,7 @@ include:
 
 services:
   admin-panel:
-    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.266.0
+    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.267.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -23,7 +23,7 @@ services:
       - '3000:3000'
 
   prividium-api:
-    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.266.0
+    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.267.0
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -73,6 +73,10 @@ services:
       - TENANTS_ENABLED=false
       - DISCLOSURE_METHODS_ENABLED=false
       - MULTI_ORG_ENABLED=true
+      - TRANSACTION_STATUS_API_ENABLED=true
+      - TRANSACTION_STATUS_RETENTION_SECONDS=1209600
+      - TRANSACTION_STATUS_SWEEP_INTERVAL_SECONDS=3600
+      - TRANSACTION_STATUS_MAX_ROWS=1000000
       - MAX_ORGANIZATIONS=100
       - MAX_WALLETS_PER_USER=100
       - WEBAUTHN_RP_NAME=ZKsync Prividium
@@ -205,7 +209,7 @@ services:
         condition: service_started
 
   user-panel:
-    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.266.0
+    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.267.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
