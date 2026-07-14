@@ -6,7 +6,7 @@ include:
 
 services:
   admin-panel:
-    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.270.0
+    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.270.1
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -24,7 +24,7 @@ services:
       - '3000:3000'
 
   prividium-api:
-    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.270.0
+    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.270.1
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -74,6 +74,7 @@ services:
       - TENANTS_ENABLED=false
       - DISCLOSURE_METHODS_ENABLED=false
       - MULTI_ORG_ENABLED=true
+      - ORG_ROUTING_BY_DOMAIN=false
       - TRANSACTION_STATUS_API_ENABLED=true
       - TRANSACTION_STATUS_RETENTION_SECONDS=1209600
       - TRANSACTION_STATUS_SWEEP_INTERVAL_SECONDS=3600
@@ -210,7 +211,7 @@ services:
         condition: service_started
 
   user-panel:
-    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.270.0
+    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.270.1
     platform: linux/amd64
     restart: unless-stopped
     environment:
