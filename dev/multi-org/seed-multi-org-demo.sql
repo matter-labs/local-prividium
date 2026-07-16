@@ -25,7 +25,8 @@ VALUES (
     '__KEYCLOAK_URL__/realms/acme/protocol/openid-connect/certs',
     'acme-client',
     'acme-client',
-    'Acme Corp SSO'
+    -- Composes the same "Sign in with Keycloak" button label as the zone env default, via the org path.
+    'Keycloak'
 )
 ON CONFLICT (organization_id) DO UPDATE SET
     issuer = EXCLUDED.issuer,
@@ -37,11 +38,12 @@ ON CONFLICT (organization_id) DO UPDATE SET
 -- The org-admin system role a pending admin is promoted into on first login (see jwt-validator-service).
 -- roles-repository.orgAdminRole(orgId) upserts it lazily on that login, so for `pnpm dev` and the
 -- dockerized stack this is idempotent -- but a truncate-then-seed harness (e2e) wipes the table, so the
--- fixture must re-create it to stay self-sufficient. Must match orgAdminRole('acme'): role name
--- Admin(<orgId>), permissions {admin_read, admin_write}, scoped to the org.
-INSERT INTO roles (role_name, system_permissions, is_system_role, organization_id)
-VALUES ('Admin(acme)', '{admin_read,admin_write}', true, 'acme')
-ON CONFLICT (role_name) DO NOTHING;
+-- fixture must re-create it to stay self-sufficient. Must match orgAdminRole('acme'): role name Admin,
+-- permissions {admin_read, admin_write}, scoped to the org. An explicit id is required because the
+-- application default (nanoid) is not available in raw SQL; role name is unique per organization.
+INSERT INTO roles (id, role_name, system_permissions, is_system_role, organization_id)
+VALUES ('role-acme-admin', 'Admin', '{admin_read,admin_write}', true, 'acme')
+ON CONFLICT (organization_id, role_name) DO NOTHING;
 
 INSERT INTO org_pending_admins (id, organization_id, oidc_sub)
 VALUES ('pending-acme-admin', 'acme', '10000000-0000-0000-0000-000000000001')

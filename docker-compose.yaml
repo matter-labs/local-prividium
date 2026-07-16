@@ -6,15 +6,17 @@ include:
 
 services:
   admin-panel:
-    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.257.3
+    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.273.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
       - VITE_PRIVIDIUM_API_URL=http://localhost:8000
-      - VITE_DISCLOSURE_METHODS_ENABLED=true
+      - VITE_DISCLOSURE_METHODS_ENABLED=false
       - VITE_FAUCET_ENABLED=true
       - VITE_WEBHOOKS_ENABLED=true
       - VITE_TENANTS_ENABLED=false
+      - VITE_TRANSACTION_STATUS_API_ENABLED=true
+      - VITE_BRAND_NAME=Prividium™
       - PORT=3000
     depends_on:
       - prividium-api
@@ -23,7 +25,7 @@ services:
       - '3000:3000'
 
   prividium-api:
-    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.257.3
+    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.273.0
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -67,12 +69,20 @@ services:
       - CORS_CACHE_DURATION_MS=60000
       - ADMIN_PANEL_REDIRECT_URLS=http://localhost:3000/callback
       - BLOCK_EXPLORER_REDIRECT_URLS=http://localhost:3010/auth/callback
+      - SWAGGER_DOCS_REDIRECT_URLS=${SWAGGER_DOCS_REDIRECT_URLS:-}
       - SWAGGER_UI_ALLOWED_ROLES=admin
       - WALLETS_API_ENABLED=true
       - TENANTS_ENABLED=false
-      - DISCLOSURE_METHODS_ENABLED=true
+      - DISCLOSURE_METHODS_ENABLED=false
+      - BRAND_NAME=Prividium™
       - MULTI_ORG_ENABLED=true
+      - ORG_ROUTING_BY_DOMAIN=false
+      - TRANSACTION_STATUS_API_ENABLED=true
+      - TRANSACTION_STATUS_RETENTION_SECONDS=1209600
+      - TRANSACTION_STATUS_SWEEP_INTERVAL_SECONDS=3600
+      - TRANSACTION_STATUS_MAX_ROWS=1000000
       - MAX_ORGANIZATIONS=100
+      - MAX_WALLETS_PER_USER=100
       - WEBAUTHN_RP_NAME=ZKsync Prividium
       - WEBAUTHN_RP_ID=localhost
       - WEBAUTHN_ORIGIN=http://localhost:3001,http://localhost:3000
@@ -203,17 +213,16 @@ services:
         condition: service_started
 
   user-panel:
-    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.257.3
+    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.273.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
       - VITE_OIDC_AUTHORITY=http://localhost:5080/realms/prividium
       - VITE_OIDC_CLIENT_ID=prividium-client
-      - VITE_OIDC_REDIRECT_URI=http://localhost:3001/callback
-      - VITE_OIDC_POST_LOGOUT_REDIRECT_URI=http://localhost:3001/login
       - VITE_OIDC_BUTTON_TEXT=Sign in with Keycloak
       - VITE_ADMIN_PANEL_REDIRECT_URI=http://localhost:3000/callback
       - VITE_AUTH_METHODS=oidc,crypto_native
+      - VITE_BRAND_NAME=Prividium™
       - VITE_WALLETS_ENABLED=true
       - VITE_FAUCET_ENABLED=true
       - VITE_BRIDGING_ENABLED=true

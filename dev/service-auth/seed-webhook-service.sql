@@ -22,8 +22,9 @@ SET
 -- ---------------------------------------------------------------------------
 
 -- 1. Role granting the two new system permissions
-INSERT INTO roles (role_name, system_permissions, is_system_role)
+INSERT INTO roles (id, role_name, system_permissions, is_system_role)
 VALUES (
+    'role-local-webhook-service',
     'local_webhook_service_role',
     ARRAY[
         'check_user_read_access',
@@ -35,7 +36,7 @@ VALUES (
     ]::text[],
     false
 )
-ON CONFLICT (role_name) DO UPDATE
+ON CONFLICT (organization_id, role_name) DO UPDATE
 SET system_permissions = EXCLUDED.system_permissions;
 
 -- 2. M2M application
@@ -49,10 +50,14 @@ ON CONFLICT (id) DO UPDATE
 SET name = EXCLUDED.name,
     description = EXCLUDED.description;
 
--- 3. Bind role to the M2M app
-INSERT INTO m2m_app_roles (m2m_app_id, role_name)
-VALUES ('m2m_local_webhook_001', 'local_webhook_service_role')
-ON CONFLICT (m2m_app_id, role_name) DO NOTHING;
+-- 3. Bind role to the M2M app. Resolve the role id by name rather than hardcoding it: on a database
+-- upgraded in place, a role that predated the surrogate-id migration carries a backfilled nanoid,
+-- not the id above, so a hardcoded reference would break the foreign key.
+INSERT INTO m2m_app_roles (m2m_app_id, role_id)
+SELECT 'm2m_local_webhook_001', r.id
+FROM roles r
+WHERE r.role_name = 'local_webhook_service_role' AND r.organization_id IS NULL
+ON CONFLICT (m2m_app_id, role_id) DO NOTHING;
 
 -- 4. API key (hash stored, raw key in header comment above)
 INSERT INTO api_keys (

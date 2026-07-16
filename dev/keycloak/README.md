@@ -200,7 +200,5 @@ VITE_AUTH_METHODS=crypto_native,oidc
 # OIDC Configuration (Local Keycloak)
 VITE_OIDC_AUTHORITY=http://localhost:5080/realms/prividium
 VITE_OIDC_CLIENT_ID=prividium-client
-VITE_OIDC_REDIRECT_URI=http://localhost:3001/callback
-VITE_OIDC_POST_LOGOUT_REDIRECT_URI=http://localhost:3001/login
 VITE_OIDC_BUTTON_TEXT=Sign in with Keycloak
 ```

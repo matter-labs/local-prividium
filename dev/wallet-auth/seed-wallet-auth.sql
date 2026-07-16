@@ -2,11 +2,11 @@
 -- Creates test users matching Keycloak realm-export.json configuration
 
 -- Insert roles if they don't exist
-INSERT INTO roles (role_name, system_permissions, is_system_role)
+INSERT INTO roles (id, role_name, system_permissions, is_system_role)
 VALUES
-    ('admin', '{contract_deployment,full_sequencer_rpc_access,full_read_access,admin_read,admin_write}', true),
-    ('user', '{}', false)
-ON CONFLICT (role_name) DO NOTHING;
+    ('admin', 'admin', '{contract_deployment,full_sequencer_rpc_access,full_read_access,admin_read,admin_write}', true),
+    ('role-user', 'user', '{}', false)
+ON CONFLICT (organization_id, role_name) DO NOTHING;
 
 -- Insert users
 INSERT INTO users (id, display_name, source)
@@ -31,13 +31,18 @@ VALUES
     )
 ON CONFLICT (id) DO NOTHING;
 
--- Assign roles to users
-INSERT INTO user_roles (user_id, role_name)
-VALUES
+-- Assign roles to users. Resolve the role id by name rather than hardcoding it: on a database
+-- upgraded in place, a role that predated the surrogate-id migration carries a backfilled nanoid,
+-- not the id above, so a hardcoded reference would break the foreign key.
+INSERT INTO user_roles (user_id, role_id)
+SELECT v.user_id, r.id
+FROM (VALUES
     ('usr_admin_test_00001', 'admin'),
     ('usr_regular_test_0002', 'user'),
     ('usr_test_test_000003', 'user')
-ON CONFLICT (user_id, role_name) DO NOTHING;
+) AS v(user_id, role_name)
+JOIN roles r ON r.role_name = v.role_name AND r.organization_id IS NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
 
 -- Associate wallet addresses with users
 -- Addresses derived from e2e test mnemonic: 'test test test test test test test test test test test junk'
