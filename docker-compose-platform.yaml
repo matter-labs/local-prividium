@@ -1,0 +1,166 @@
+services:
+  postgres:
+    image: postgres:18@sha256:3a82e1f56c8f0f5616a11103ac3d47e632c3938698946a7ad26da0df1334744a
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?Set POSTGRES_SUPERUSER_PASSWORD}
+      PGDATA: /var/lib/postgresql/data
+      PRIVIDIUM_DB_NAME: ${PRIVIDIUM_DB_NAME:-prividium_api}
+      PRIVIDIUM_DB_USER: ${PRIVIDIUM_DB_USER:?Set PRIVIDIUM_DB_USER}
+      PRIVIDIUM_DB_PASSWORD: ${PRIVIDIUM_DB_PASSWORD:?Set PRIVIDIUM_DB_PASSWORD}
+      EXPLORER_DB_NAME: ${EXPLORER_DB_NAME:-prividium_block_explorer}
+      EXPLORER_DB_USER: ${EXPLORER_DB_USER:?Set EXPLORER_DB_USER}
+      EXPLORER_DB_PASSWORD: ${EXPLORER_DB_PASSWORD:?Set EXPLORER_DB_PASSWORD}
+      KEYCLOAK_DB_NAME: ${KEYCLOAK_DB_NAME:-keycloak}
+      KEYCLOAK_DB_USER: ${KEYCLOAK_DB_USER:?Set KEYCLOAK_DB_USER}
+      KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Set KEYCLOAK_DB_PASSWORD}
+      WEBHOOK_DB_NAME: ${WEBHOOK_DB_NAME:-zksync_webhook_db}
+      WEBHOOK_DB_USER: ${WEBHOOK_DB_USER:?Set WEBHOOK_DB_USER}
+      WEBHOOK_DB_PASSWORD: ${WEBHOOK_DB_PASSWORD:?Set WEBHOOK_DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./dev/postgres/init-databases.sh:/docker-entrypoint-initdb.d/10-sandbox-databases.sh:ro
+    networks:
+      - data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          pg_isready -U postgres -d postgres &&
+          test "$$(PGPASSWORD=$$POSTGRES_PASSWORD psql -U postgres -d postgres -Atc
+          "SELECT count(*) FROM pg_database WHERE datname IN
+          ('$$PRIVIDIUM_DB_NAME','$$EXPLORER_DB_NAME','$$KEYCLOAK_DB_NAME','$$WEBHOOK_DB_NAME')")" = "4"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  chain-bootstrap:
+    profiles: [chain-bootstrap]
+    build:
+      context: ./dev/chain-bootstrap
+      dockerfile: Dockerfile
+      args:
+        ZK_DEPLOYER_COMMIT: 16c6a83b4f634609958f347c56549ba19bf9df9b
+        PROTOCOL_COMMIT: e091691063c99a1d0281d6fe42fb0ec4430f3673
+    image: local/zk-deployer:16c6a83-protocol-e091691
+    platform: linux/amd64
+    environment:
+      BOOTSTRAP_MODE: ${CHAIN_BOOTSTRAP_MODE:-prepare}
+      CONFIRM_BROADCAST: ${CONFIRM_BROADCAST:-}
+      L2_CHAIN_ID: ${L2_CHAIN_ID:?Set L2_CHAIN_ID}
+      SEPOLIA_RPC_URL: ${SEPOLIA_RPC_URL:?Set SEPOLIA_RPC_URL}
+      ETH_PRICE_USD: ${ETH_PRICE_USD:-3000}
+      DEPLOYMENT_SIGNER_MIN_L1_BALANCE_WEI: ${DEPLOYMENT_SIGNER_MIN_L1_BALANCE_WEI:-10000000000000000}
+      L1_DEPLOYER_PRIVATE_KEY: ${L1_DEPLOYER_PRIVATE_KEY:?Set L1_DEPLOYER_PRIVATE_KEY}
+      ECOSYSTEM_GOVERNOR_PRIVATE_KEY: ${ECOSYSTEM_GOVERNOR_PRIVATE_KEY:?Set ECOSYSTEM_GOVERNOR_PRIVATE_KEY}
+      CHAIN_OWNER_PRIVATE_KEY: ${CHAIN_OWNER_PRIVATE_KEY:?Set CHAIN_OWNER_PRIVATE_KEY}
+      FEE_ACCOUNT_PRIVATE_KEY: ${FEE_ACCOUNT_PRIVATE_KEY:?Set FEE_ACCOUNT_PRIVATE_KEY}
+      OPERATOR_COMMIT_PRIVATE_KEY: ${OPERATOR_COMMIT_PRIVATE_KEY:?Set OPERATOR_COMMIT_PRIVATE_KEY}
+      OPERATOR_PROVE_PRIVATE_KEY: ${OPERATOR_PROVE_PRIVATE_KEY:?Set OPERATOR_PROVE_PRIVATE_KEY}
+      OPERATOR_EXECUTE_PRIVATE_KEY: ${OPERATOR_EXECUTE_PRIVATE_KEY:?Set OPERATOR_EXECUTE_PRIVATE_KEY}
+    volumes:
+      - ${RUNTIME_DIR:-/etc/prividium/runtime}/chain:/runtime/chain
+      - ./deployment/public:/public
+    networks:
+      - app
+    restart: "no"
+
+  chain-preflight:
+    build:
+      context: ./dev/chain-bootstrap
+      dockerfile: Dockerfile
+      args:
+        ZK_DEPLOYER_COMMIT: 16c6a83b4f634609958f347c56549ba19bf9df9b
+        PROTOCOL_COMMIT: e091691063c99a1d0281d6fe42fb0ec4430f3673
+    image: local/zk-deployer:16c6a83-protocol-e091691
+    platform: linux/amd64
+    entrypoint: ["/bin/bash", "/preflight.sh"]
+    environment:
+      L2_CHAIN_ID: ${L2_CHAIN_ID}
+      SEPOLIA_RPC_URL: ${SEPOLIA_RPC_URL}
+      OPERATOR_MIN_L1_BALANCE_WEI: ${OPERATOR_MIN_L1_BALANCE_WEI:-10000000000000000}
+      OPERATOR_COMMIT_PRIVATE_KEY: ${OPERATOR_COMMIT_PRIVATE_KEY}
+      OPERATOR_PROVE_PRIVATE_KEY: ${OPERATOR_PROVE_PRIVATE_KEY}
+      OPERATOR_EXECUTE_PRIVATE_KEY: ${OPERATOR_EXECUTE_PRIVATE_KEY}
+    volumes:
+      - ./dev/chain-bootstrap/preflight.sh:/preflight.sh:ro
+      - ${RUNTIME_DIR:-/etc/prividium/runtime}/chain:/runtime/chain:ro
+      - ./deployment/public:/public:ro
+    networks:
+      - app
+    restart: "no"
+
+  zksyncos:
+    image: ghcr.io/matter-labs/zksync-os-server:v0.20.8@sha256:fde7bc9fd72dab21f4111b6a05cd8414c2095d531e75044ffac8384b15c32024
+    platform: linux/amd64
+    restart: unless-stopped
+    environment:
+      L1_PROVIDER_RPC_URL: ${SEPOLIA_RPC_URL}
+    user: root
+    working_dir: /app
+    entrypoint: ""
+    command:
+      - /usr/bin/tini
+      - --
+      - zksync-os-server
+      - --config
+      - /runtime/chain/server.yaml
+      - --config
+      - /runtime/chain/sandbox-overrides.yaml
+    volumes:
+      - zksyncos_db:/db
+      - ${RUNTIME_DIR:-/etc/prividium/runtime}/chain:/runtime/chain:ro
+    depends_on:
+      chain-preflight:
+        condition: service_completed_successfully
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD", "/usr/bin/bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/3050"]
+      interval: 10s
+      timeout: 5s
+      retries: 24
+      start_period: 60s
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0@sha256:09a381c715ab0b111835b70f2905955274843a219c6f27efb348e4d9f4086858
+    platform: linux/amd64
+    restart: unless-stopped
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME:?Set KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD:?Set KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/${KEYCLOAK_DB_NAME:-keycloak}
+      KC_DB_USERNAME: ${KEYCLOAK_DB_USER}
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
+      KC_HEALTH_ENABLED: "true"
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME: https://idp.${SANDBOX_DOMAIN:?Set SANDBOX_DOMAIN}
+      KC_HOSTNAME_STRICT: "true"
+      KC_PROXY_HEADERS: xforwarded
+      JAVA_OPTS_KC_HEAP: -Xms256m -Xmx1024m
+      SANDBOX_DOMAIN: ${SANDBOX_DOMAIN}
+      SANDBOX_ADMIN_EMAIL: ${SANDBOX_ADMIN_EMAIL:?Set SANDBOX_ADMIN_EMAIL}
+      SANDBOX_ADMIN_PASSWORD: ${SANDBOX_ADMIN_PASSWORD:?Set SANDBOX_ADMIN_PASSWORD}
+    command: ["start", "--import-realm"]
+    volumes:
+      - ./dev/keycloak/realm-export.json:/opt/keycloak/data/import/prividium-realm.json:ro
+      - keycloak_data:/opt/keycloak/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - app
+      - data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/9000;
+          printf 'GET /health/ready HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n' >&3;
+          grep -q '200 OK' <&3
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s

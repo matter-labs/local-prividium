@@ -2,14 +2,14 @@
     "id": "prividium",
     "realm": "prividium",
     "enabled": true,
-    "sslRequired": "none",
+    "sslRequired": "external",
     "registrationAllowed": false,
     "loginWithEmailAllowed": true,
     "duplicateEmailsAllowed": false,
     "resetPasswordAllowed": true,
     "editUsernameAllowed": false,
     "bruteForceProtected": true,
-    "accessTokenLifespan": 3600,
+    "accessTokenLifespan": 900,
     "ssoSessionIdleTimeout": 3600,
     "ssoSessionMaxLifespan": 36000,
     "offlineSessionIdleTimeout": 2592000,
@@ -19,37 +19,45 @@
     "clients": [
         {
             "clientId": "prividium-client",
-            "name": "Prividium Local Development",
-            "description": "OAuth client for Prividium local testing",
+            "name": "Prividium Sandbox",
+            "description": "OIDC client for the Sepolia-backed Prividium sandbox",
             "enabled": true,
             "clientAuthenticatorType": "client-secret",
-            "secret": "prividium-local-secret",
             "redirectUris": [
-                "http://localhost:3000/*",
-                "http://localhost:3001/*",
-                "http://localhost:3002/*",
-                "http://localhost:3010/*",
-                "http://localhost:4000/*",
-                "http://localhost:5173/*",
-                "http://localhost:5080/*",
-                "http://localhost:3300/*",
-                "http://localhost:3301/*",
-                "http://localhost:3302/*",
-                "http://localhost:3310/*"
+                "https://app.${SANDBOX_DOMAIN}/*",
+                "https://admin.${SANDBOX_DOMAIN}/*",
+                "https://explorer.${SANDBOX_DOMAIN}/*",
+                "https://auth.${SANDBOX_DOMAIN}/*"
             ],
-            "webOrigins": ["+"],
+            "webOrigins": [
+                "https://app.${SANDBOX_DOMAIN}",
+                "https://admin.${SANDBOX_DOMAIN}",
+                "https://explorer.${SANDBOX_DOMAIN}",
+                "https://auth.${SANDBOX_DOMAIN}"
+            ],
             "protocol": "openid-connect",
             "publicClient": true,
             "standardFlowEnabled": true,
             "implicitFlowEnabled": false,
-            "directAccessGrantsEnabled": true,
+            "directAccessGrantsEnabled": false,
             "serviceAccountsEnabled": false,
             "attributes": {
                 "pkce.code.challenge.method": "S256",
-                "access.token.lifespan": "3600",
-                "post.logout.redirect.uris": "+"
+                "access.token.lifespan": "900",
+                "post.logout.redirect.uris": "https://app.${SANDBOX_DOMAIN}/*##https://admin.${SANDBOX_DOMAIN}/*"
             },
             "protocolMappers": [
+                {
+                    "name": "prividium-audience",
+                    "protocol": "openid-connect",
+                    "protocolMapper": "oidc-audience-mapper",
+                    "consentRequired": false,
+                    "config": {
+                        "included.client.audience": "prividium-client",
+                        "id.token.claim": "true",
+                        "access.token.claim": "true"
+                    }
+                },
                 {
                     "name": "email",
                     "protocol": "openid-connect",
@@ -85,99 +93,37 @@
         "realm": [
             {
                 "name": "admin",
-                "description": "Administrator role"
+                "description": "Prividium sandbox administrator"
             },
             {
                 "name": "user",
-                "description": "Regular user role"
+                "description": "Prividium sandbox user"
             }
         ]
     },
     "users": [
         {
             "id": "00000000-0000-0000-0000-000000000001",
-            "username": "admin@local.dev",
-            "email": "admin@local.dev",
+            "username": "${SANDBOX_ADMIN_EMAIL}",
+            "email": "${SANDBOX_ADMIN_EMAIL}",
             "emailVerified": true,
             "enabled": true,
-            "firstName": "Admin",
-            "lastName": "User",
+            "firstName": "Sandbox",
+            "lastName": "Administrator",
+            "requiredActions": [
+                "UPDATE_PASSWORD"
+            ],
             "credentials": [
                 {
                     "type": "password",
-                    "value": "password",
-                    "temporary": false
+                    "value": "${SANDBOX_ADMIN_PASSWORD}",
+                    "temporary": true
                 }
             ],
-            "realmRoles": ["admin", "user"]
-        },
-        {
-            "id": "00000000-0000-0000-0000-000000000002",
-            "username": "user@local.dev",
-            "email": "user@local.dev",
-            "emailVerified": true,
-            "enabled": true,
-            "firstName": "Regular",
-            "lastName": "User",
-            "credentials": [
-                {
-                    "type": "password",
-                    "value": "password",
-                    "temporary": false
-                }
-            ],
-            "realmRoles": ["user"]
-        },
-        {
-            "id": "00000000-0000-0000-0000-000000000003",
-            "username": "test@local.dev",
-            "email": "test@local.dev",
-            "emailVerified": true,
-            "enabled": true,
-            "firstName": "Test",
-            "lastName": "User",
-            "credentials": [
-                {
-                    "type": "password",
-                    "value": "password",
-                    "temporary": false
-                }
-            ],
-            "realmRoles": ["user"]
-        },
-        {
-            "id": "00000000-0000-0000-0000-000000000004",
-            "username": "user1@local.dev",
-            "email": "user1@local.dev",
-            "emailVerified": true,
-            "enabled": true,
-            "firstName": "User",
-            "lastName": "One",
-            "credentials": [
-                {
-                    "type": "password",
-                    "value": "password",
-                    "temporary": false
-                }
-            ],
-            "realmRoles": ["user"]
-        },
-        {
-            "id": "00000000-0000-0000-0000-000000000005",
-            "username": "user2@local.dev",
-            "email": "user2@local.dev",
-            "emailVerified": true,
-            "enabled": true,
-            "firstName": "User",
-            "lastName": "Two",
-            "credentials": [
-                {
-                    "type": "password",
-                    "value": "password",
-                    "temporary": false
-                }
-            ],
-            "realmRoles": ["user"]
+            "realmRoles": [
+                "admin",
+                "user"
+            ]
         }
     ]
 }

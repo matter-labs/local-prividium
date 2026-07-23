@@ -1,0 +1,312 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+
+repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+encrypted_file="${SANDBOX_SECRETS_FILE:-${repo_root}/deployment/secrets/sandbox.enc.env}"
+policy_file="${FUNDING_POLICY_FILE:-${repo_root}/deployment/funding-policy.json}"
+public_manifest="${PUBLIC_MANIFEST_PATH:-${repo_root}/deployment/public/manifest.json}"
+from_environment=false
+
+if [[ "${1:-}" == "--from-environment" ]]; then
+  from_environment=true
+  shift
+fi
+action="${1:-plan}"
+if [[ "$action" != "plan" && "$action" != "apply" ]]; then
+  echo "Usage: tools/funding [plan|apply]" >&2
+  exit 1
+fi
+
+if [[ "$from_environment" != "true" ]]; then
+  command -v sops >/dev/null || {
+    echo "sops is required to read the encrypted sandbox environment" >&2
+    exit 1
+  }
+  if [[ ! -s "$encrypted_file" ]]; then
+    echo "Encrypted sandbox environment not found: ${encrypted_file}" >&2
+    echo "Create it first with: tools/sandbox init" >&2
+    exit 1
+  fi
+  export PRIVIDIUM_FUNDING_SCRIPT="${BASH_SOURCE[0]}"
+  export PRIVIDIUM_FUNDING_ACTION="$action"
+  export FUNDING_POLICY_FILE="$policy_file"
+  export PUBLIC_MANIFEST_PATH="$public_manifest"
+  exec sops exec-env "$encrypted_file" \
+    'exec "$PRIVIDIUM_FUNDING_SCRIPT" --from-environment "$PRIVIDIUM_FUNDING_ACTION"'
+fi
+
+source "${repo_root}/tools/lib/sandbox-roles.sh"
+source "${repo_root}/tools/lib/funding-policy.sh"
+
+for required_command in cast jq; do
+  command -v "$required_command" >/dev/null || {
+    echo "${required_command} is required" >&2
+    exit 1
+  }
+done
+
+: "${SEPOLIA_RPC_URL:?SEPOLIA_RPC_URL is missing from the encrypted environment}"
+: "${L2_CHAIN_ID:?L2_CHAIN_ID is missing from the encrypted environment}"
+: "${RUNTIME_DIR:?RUNTIME_DIR is missing from the encrypted environment}"
+: "${BRIDGE_SPONSOR_PRIVATE_KEY:?BRIDGE_SPONSOR_PRIVATE_KEY is missing from the encrypted environment}"
+
+runtime_dir="$RUNTIME_DIR"
+if [[ "$runtime_dir" != /* ]]; then
+  runtime_dir="${repo_root}/${runtime_dir}"
+fi
+report_path="${FUNDING_REPORT_PATH:-${runtime_dir}/reports/funding-plan.md}"
+rows_file=$(mktemp)
+canonical_file=$(mktemp)
+trap 'rm -f "$rows_file" "$canonical_file"' EXIT
+
+sandbox_validate_funding_policy "$policy_file"
+sandbox_validate_distinct_roles
+
+actual_l1_chain_id=$(cast chain-id --rpc-url "$SEPOLIA_RPC_URL")
+if [[ "$actual_l1_chain_id" != "11155111" ]]; then
+  echo "Configured L1 RPC returned chain ID ${actual_l1_chain_id}; expected Sepolia (11155111)." >&2
+  exit 1
+fi
+
+format_eth() {
+  cast from-wei "$1"
+}
+
+create_plan() {
+  local role
+  local address
+  local current
+  local target
+  local shortfall
+  local purpose
+
+  : >"$rows_file"
+  total_shortfall=0
+  for role in "${sandbox_funded_role_ids[@]}"; do
+    address=$(sandbox_role_address "$role")
+    current=$(cast balance "$address" --wei --rpc-url "$SEPOLIA_RPC_URL")
+    target=$(sandbox_policy_role_target "$policy_file" "$role")
+    purpose=$(sandbox_policy_role_purpose "$policy_file" "$role")
+    if (( current < target )); then
+      shortfall=$((target - current))
+    else
+      shortfall=0
+    fi
+    total_shortfall=$((total_shortfall + shortfall))
+    printf "%s\t%s\t%s\t%s\t%s\t%s\n" \
+      "$role" "$address" "$current" "$target" "$shortfall" "$purpose" >>"$rows_file"
+  done
+
+  sponsor_address=$(sandbox_role_address bridge_sponsor)
+  sponsor_balance=$(cast balance "$sponsor_address" --wei --rpc-url "$SEPOLIA_RPC_URL")
+  sponsor_reserve=$(jq -r '.sponsor.retained_reserve_wei' "$policy_file")
+  customer_funding=$(jq -r '.customer_funding_wei' "$policy_file")
+  maximum_allocated=$(jq -r '.maximum_allocated_wei' "$policy_file")
+  policy_version=$(jq -r '.policy_version' "$policy_file")
+  benchmark_release=$(jq -r '.benchmark.release' "$policy_file")
+  required_sponsor_balance=$((total_shortfall + sponsor_reserve))
+  if (( sponsor_balance < required_sponsor_balance )); then
+    sponsor_shortfall=$((required_sponsor_balance - sponsor_balance))
+    sponsor_ready=false
+  else
+    sponsor_shortfall=0
+    sponsor_ready=true
+  fi
+
+  {
+    printf "l1_chain_id=11155111\n"
+    printf "l2_chain_id=%s\n" "$L2_CHAIN_ID"
+    printf "sponsor=%s\n" "$(printf "%s" "$sponsor_address" | sandbox_lowercase)"
+    printf "sponsor_balance=%s\n" "$sponsor_balance"
+    printf "sponsor_reserve=%s\n" "$sponsor_reserve"
+    cat "$rows_file"
+  } >"$canonical_file"
+  plan_id=$(sandbox_sha256 <"$canonical_file")
+}
+
+write_report() {
+  local status
+  local role
+  local address
+  local current
+  local target
+  local shortfall
+  local purpose
+  local report_tmp
+
+  if [[ "$sponsor_ready" == "true" ]]; then
+    status="READY"
+  else
+    status="CUSTOMER FUNDING REQUIRED"
+  fi
+  report_tmp=$(mktemp)
+  {
+    echo "# Core sandbox funding plan"
+    echo
+    echo "- Generated: \`$(date -u +%Y-%m-%dT%H:%M:%SZ)\`"
+    echo "- Plan ID: \`${plan_id}\`"
+    echo "- Status: **${status}**"
+    echo "- Scope: core sandbox only"
+    echo "- Funding policy: \`${policy_version}\` (\`${benchmark_release}\`)"
+    echo "- Operator runway: 14 days / 2,016 ten-minute batches"
+    echo
+    echo "## Customer action"
+    echo
+    echo "Send **1 Sepolia ETH** to the single sandbox funding wallet:"
+    echo
+    echo "\`${sponsor_address}\`"
+    echo
+    echo "Do not fund deployment or operator addresses manually. The distribution helper sends only their current shortfalls."
+    echo
+    echo "| Funding wallet balance | Minimum needed for this plan | Additional required | Retained reserve |"
+    echo "| ---: | ---: | ---: | ---: |"
+    printf "| %s ETH | %s ETH | %s ETH | %s ETH |\n" \
+      "$(format_eth "$sponsor_balance")" \
+      "$(format_eth "$required_sponsor_balance")" \
+      "$(format_eth "$sponsor_shortfall")" \
+      "$(format_eth "$sponsor_reserve")"
+    echo
+    echo "## Planned distributions"
+    echo
+    echo "| Group | Role | Address | Current | Target | Shortfall | Purpose |"
+    echo "| --- | --- | --- | ---: | ---: | ---: | --- |"
+    while IFS=$'\t' read -r role address current target shortfall purpose; do
+      case "$role" in
+        l1_deployer|ecosystem_governor|chain_owner) group="Chain deployment" ;;
+        *) group="Settlement operator" ;;
+      esac
+      printf "| %s | %s | \`%s\` | %s ETH | %s ETH | %s ETH | %s |\n" \
+        "$group" \
+        "$(sandbox_role_label "$role")" \
+        "$address" \
+        "$(format_eth "$current")" \
+        "$(format_eth "$target")" \
+        "$(format_eth "$shortfall")" \
+        "$purpose"
+    done <"$rows_file"
+    echo
+    echo "## Planned service funding"
+    echo
+    echo "| Service | L2 target | When funded | Source |"
+    echo "| --- | ---: | --- | --- |"
+    printf "| Watchdog | %s ETH | Idempotent core startup job | Sandbox funding wallet retained reserve |\n" \
+      "$(format_eth "$(jq -r '.sponsor.watchdog_l2_target_wei' "$policy_file")")"
+    echo
+    echo "## Budget boundary"
+    echo
+    printf -- "- Customer deposit: %s ETH\n" "$(format_eth "$customer_funding")"
+    printf -- "- Maximum policy allocation: %s ETH\n" "$(format_eth "$maximum_allocated")"
+    printf -- "- Current role shortfalls: %s ETH\n" "$(format_eth "$total_shortfall")"
+    printf -- "- Sponsor reserve after distribution: %s ETH\n" "$(format_eth "$sponsor_reserve")"
+    printf -- "- Maximum transfer amount for this plan: %s ETH\n" "$(format_eth "$total_shortfall")"
+    printf -- "- Minimum sponsor balance for this plan: %s ETH\n" "$(format_eth "$required_sponsor_balance")"
+    echo "- SSO/bundler and the institutional demo are not included."
+    if [[ -s "$public_manifest" ]]; then
+      echo
+      echo "> The chain manifest already exists. This report is informational; deployment-role distribution is disabled after broadcast."
+    fi
+  } >"$report_tmp"
+
+  mkdir -p "$(dirname "$report_path")"
+  install -m 0600 "$report_tmp" "$report_path"
+  rm -f "$report_tmp"
+  cat "$report_path"
+  echo
+  echo "Protected funding report written to ${report_path}"
+}
+
+create_plan
+write_report
+
+if [[ "$action" == "plan" ]]; then
+  if [[ "$sponsor_ready" != "true" ]]; then
+    exit 2
+  fi
+  exit 0
+fi
+
+if [[ -s "$public_manifest" ]]; then
+  echo "Refusing to distribute deployment-role funds after the public chain manifest exists." >&2
+  exit 1
+fi
+if [[ "$sponsor_ready" != "true" ]]; then
+  echo "The sandbox funding wallet cannot cover the current plan." >&2
+  echo "Send 1 Sepolia ETH to ${sponsor_address}, then rerun tools/sandbox funding." >&2
+  exit 2
+fi
+if (( total_shortfall == 0 )); then
+  echo "Every deployment and operator role is already at or above its target; no transfers were submitted."
+  exit 0
+fi
+
+latest_nonce=$(cast rpc --rpc-url "$SEPOLIA_RPC_URL" eth_getTransactionCount "$sponsor_address" latest | tr -d '"')
+pending_nonce=$(cast rpc --rpc-url "$SEPOLIA_RPC_URL" eth_getTransactionCount "$sponsor_address" pending | tr -d '"')
+if [[ ! "$latest_nonce" =~ ^0x[0-9a-fA-F]+$ || ! "$pending_nonce" =~ ^0x[0-9a-fA-F]+$ ]]; then
+  echo "Unable to read the sandbox funding wallet nonce" >&2
+  exit 1
+fi
+if (( pending_nonce != latest_nonce )); then
+  echo "The sandbox funding wallet has pending Sepolia transactions." >&2
+  echo "Wait for them to confirm or disappear before rerunning funding apply." >&2
+  exit 1
+fi
+
+expected_confirmation="FUND_SEPOLIA_${plan_id}"
+if [[ "${CONFIRM_FUNDING:-}" != "$expected_confirmation" ]]; then
+  if [[ ! -t 0 ]]; then
+    echo "Non-interactive funding requires CONFIRM_FUNDING=${expected_confirmation}" >&2
+    exit 1
+  fi
+  printf "\nThis will distribute up to %s Sepolia ETH from %s.\n" \
+    "$(format_eth "$total_shortfall")" "$sponsor_address"
+  read -r -p "Type the full funding plan ID to continue: " typed_plan_id
+  if [[ "$typed_plan_id" != "$plan_id" ]]; then
+    echo "Plan confirmation did not match; no transfers were submitted." >&2
+    exit 1
+  fi
+fi
+
+while IFS=$'\t' read -r role address _current target _shortfall _purpose; do
+  current=$(cast balance "$address" --wei --rpc-url "$SEPOLIA_RPC_URL")
+  if (( current >= target )); then
+    printf "%s is already funded; skipping.\n" "$(sandbox_role_label "$role")"
+    continue
+  fi
+  shortfall=$((target - current))
+  printf "Funding %s with %s ETH...\n" \
+    "$(sandbox_role_label "$role")" "$(format_eth "$shortfall")"
+  transaction=$(
+    cast send "$address" \
+      --value "${shortfall}wei" \
+      --private-key "$BRIDGE_SPONSOR_PRIVATE_KEY" \
+      --rpc-url "$SEPOLIA_RPC_URL" \
+      --confirmations 1 \
+      --json
+  )
+  transaction_hash=$(jq -r '.transactionHash // .transaction_hash // empty' <<<"$transaction")
+  if [[ ! "$transaction_hash" =~ ^0x[0-9a-fA-F]{64}$ ]]; then
+    echo "Funding transaction returned no valid transaction hash" >&2
+    exit 1
+  fi
+  confirmed=$(cast balance "$address" --wei --rpc-url "$SEPOLIA_RPC_URL")
+  if (( confirmed < target )); then
+    echo "$(sandbox_role_label "$role") remains below target after ${transaction_hash}" >&2
+    exit 1
+  fi
+  echo "Confirmed ${transaction_hash}"
+done <"$rows_file"
+
+remaining_sponsor_balance=$(cast balance "$sponsor_address" --wei --rpc-url "$SEPOLIA_RPC_URL")
+if (( remaining_sponsor_balance < sponsor_reserve )); then
+  echo "Sandbox funding wallet fell below its required retained reserve" >&2
+  exit 1
+fi
+
+create_plan
+write_report
+if (( total_shortfall != 0 )); then
+  echo "One or more roles remain below target after distribution" >&2
+  exit 1
+fi
+echo "Core role distribution completed; rerunning this command is now a no-op."

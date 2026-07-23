@@ -7,11 +7,17 @@ on:
     branches: ['main']
 
 jobs:
-  ci-success:
-    name: Github Status Check
+  validate-sandbox:
+    name: Validate sandbox definition
     runs-on: ubuntu-latest
-    if: always() && !cancelled()
     steps:
-      - name: Status
+      - uses: actions/checkout@v4
+
+      - name: Check shell scripts
+        shell: bash
         run: |
-          exit 0
+          find tools dev -type f \( -name '*.sh' -o -path 'tools/*' \) -print0 |
+            xargs -0 bash -n
+
+      - name: Render and validate every Compose profile
+        run: tools/validate-stack --allow-unbenchmarked deployment/sandbox.env.example

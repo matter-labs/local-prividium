@@ -1,3 +1,12 @@
 # IDEs
 .idea
 .pnpm-store
+
+# Decrypted secrets and runtime chain artifacts
+deployment/runtime/
+deployment/secrets/*.env
+
+# One-shot setup output must live in Docker volumes, never the worktree.
+dev/sso-setup/contracts.env
+dev/sso-setup/contracts/
+dev/examples/institutional-demo/contracts.env

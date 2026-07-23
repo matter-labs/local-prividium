@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+environment_file="${SANDBOX_ENV_FILE:-/etc/prividium/runtime/sandbox.env}"
+mode="${1:-prepare}"
+
+if [[ ! -s "$environment_file" ]]; then
+  echo "Runtime environment not found: ${environment_file}" >&2
+  exit 1
+fi
+if [[ "$mode" != "prepare" && "$mode" != "broadcast" ]]; then
+  echo "Usage: tools/chain-bootstrap [prepare|broadcast]" >&2
+  exit 1
+fi
+
+caller_confirmation="${CONFIRM_BROADCAST:-}"
+set -a
+source "$environment_file"
+set +a
+if [[ -n "$caller_confirmation" ]]; then
+  CONFIRM_BROADCAST="$caller_confirmation"
+  export CONFIRM_BROADCAST
+fi
+export CHAIN_BOOTSTRAP_MODE="$mode"
+if [[ "$mode" == "broadcast" ]]; then
+  expected="BROADCAST_SEPOLIA_${L2_CHAIN_ID}"
+  if [[ "${CONFIRM_BROADCAST:-}" != "$expected" ]]; then
+    echo "Set CONFIRM_BROADCAST=${expected} in the calling environment to authorize Sepolia writes" >&2
+    exit 1
+  fi
+fi
+
+cd "$repo_root"
+printf "\nBuilding locked zk-deployer and Protocol v31 contracts...\n"
+docker compose --env-file "$environment_file" --profile chain-bootstrap build chain-bootstrap
+printf "\nRunning chain bootstrap mode: %s\n\n" "$mode"
+docker compose --env-file "$environment_file" --profile chain-bootstrap run --rm \
+  -e "BOOTSTRAP_MODE=${mode}" \
+  -e "CONFIRM_BROADCAST=${CONFIRM_BROADCAST:-}" \
+  chain-bootstrap

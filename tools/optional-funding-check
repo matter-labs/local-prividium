@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+
+repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+environment_file="${SANDBOX_ENV_FILE:-/etc/prividium/runtime/sandbox.env}"
+policy_file="${FUNDING_POLICY_FILE:-${repo_root}/deployment/funding-policy.json}"
+profile="${1:-}"
+
+case "$profile" in
+  sso|institutional-demo) ;;
+  *)
+    echo "Usage: tools/optional-funding-check <sso|institutional-demo>" >&2
+    exit 1
+    ;;
+esac
+if [[ ! -s "$environment_file" ]]; then
+  echo "Runtime environment not found: ${environment_file}" >&2
+  exit 1
+fi
+
+set -a
+source "$environment_file"
+set +a
+source "${repo_root}/tools/lib/sandbox-roles.sh"
+source "${repo_root}/tools/lib/funding-policy.sh"
+
+command -v cast >/dev/null || {
+  echo "cast is required for the optional-profile funding preflight" >&2
+  exit 1
+}
+: "${SEPOLIA_RPC_URL:?SEPOLIA_RPC_URL is missing from the runtime environment}"
+: "${BRIDGE_SPONSOR_PRIVATE_KEY:?BRIDGE_SPONSOR_PRIVATE_KEY is missing from the runtime environment}"
+
+sandbox_validate_funding_policy "$policy_file"
+if [[ "$(cast chain-id --rpc-url "$SEPOLIA_RPC_URL")" != "11155111" ]]; then
+  echo "Configured provider is not Ethereum Sepolia" >&2
+  exit 1
+fi
+
+sponsor_address=$(sandbox_role_address bridge_sponsor)
+sponsor_balance=$(cast balance "$sponsor_address" --wei --rpc-url "$SEPOLIA_RPC_URL")
+latest_nonce=$(cast rpc --rpc-url "$SEPOLIA_RPC_URL" eth_getTransactionCount "$sponsor_address" latest | tr -d '"')
+pending_nonce=$(cast rpc --rpc-url "$SEPOLIA_RPC_URL" eth_getTransactionCount "$sponsor_address" pending | tr -d '"')
+if [[ ! "$latest_nonce" =~ ^0x[0-9a-fA-F]+$ ||
+      ! "$pending_nonce" =~ ^0x[0-9a-fA-F]+$ ]]; then
+  echo "Unable to read the sandbox funding wallet nonce" >&2
+  exit 1
+fi
+if (( pending_nonce != latest_nonce )); then
+  echo "The sandbox funding wallet has pending Sepolia transactions." >&2
+  echo "Wait for them to settle before enabling an optional profile." >&2
+  exit 1
+fi
+core_reserve=$(jq -r '.sponsor.retained_reserve_wei' "$policy_file")
+sso_increment=$(sandbox_policy_optional_minimum "$policy_file" sso)
+demo_increment=$(sandbox_policy_optional_minimum "$policy_file" institutional-demo)
+if [[ "$profile" == "sso" ]]; then
+  incremental_minimum=$sso_increment
+  profile_label="SSO/bundler"
+else
+  incremental_minimum=$((sso_increment + demo_increment))
+  profile_label="SSO/bundler plus institutional demo"
+fi
+required_balance=$((core_reserve + incremental_minimum))
+if (( sponsor_balance < required_balance )); then
+  shortfall=$((required_balance - sponsor_balance))
+else
+  shortfall=0
+fi
+
+echo "Optional profile funding preflight"
+echo
+echo "Profile: ${profile_label}"
+echo "Sandbox funding wallet: ${sponsor_address}"
+echo "Current Sepolia balance: $(cast from-wei "$sponsor_balance") ETH"
+echo "Core reserve kept intact: $(cast from-wei "$core_reserve") ETH"
+echo "Conservative optional allowance: $(cast from-wei "$incremental_minimum") ETH"
+echo "Minimum balance before enable: $(cast from-wei "$required_balance") ETH"
+echo
+echo "This optional profile is outside the core 1 ETH funding guarantee."
+
+if (( shortfall > 0 )); then
+  echo "Customer action: send at least $(cast from-wei "$shortfall") additional Sepolia ETH to ${sponsor_address}."
+  exit 2
+fi
+echo "READY: the sandbox funding wallet satisfies the optional-profile preflight."

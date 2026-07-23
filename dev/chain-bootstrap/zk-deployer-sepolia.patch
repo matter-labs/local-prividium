@@ -1,0 +1,71 @@
+diff --git a/bin/zk-deployer/src/commands/bootstrap.rs b/bin/zk-deployer/src/commands/bootstrap.rs
+--- a/bin/zk-deployer/src/commands/bootstrap.rs
++++ b/bin/zk-deployer/src/commands/bootstrap.rs
+@@ -1,5 +1,6 @@
+ use std::path::PathBuf;
+ 
++use alloy::primitives::{Address, B256};
+ use anyhow::{Context, Result};
+ use clap::Parser;
+ 
+@@ -144,6 +145,18 @@ pub async fn run(args: BootstrapArgs) -> Result<()> {
+         let mut runner = ForgeRunner::new(&shared)?;
+         let sender = runner.prepare_sender(deployer_address).await?;
+-        let owner = Wallet::resolve(None, None, &sender)?;
++        let ecosystem_owner: Option<Address> = std::env::var(
++            "ZK_DEPLOYER_ECOSYSTEM_GOVERNOR_ADDRESS",
++        )
++        .ok()
++        .map(|value| value.parse())
++        .transpose()
++        .context("invalid ZK_DEPLOYER_ECOSYSTEM_GOVERNOR_ADDRESS")?;
++        let zk_token_asset_id: Option<B256> = std::env::var("ZK_TOKEN_ASSET_ID")
++            .ok()
++            .map(|value| value.parse())
++            .transpose()
++            .context("invalid ZK_TOKEN_ASSET_ID")?;
++        let owner = Wallet::resolve(ecosystem_owner, None, &sender)?;
+ 
+         let eco_input = EcosystemInitInput {
+             sender: sender.address,
+@@ -177,7 +190,7 @@ pub async fn run(args: BootstrapArgs) -> Result<()> {
+             vm_type: VMOption::ZKSyncOsVM,
+             with_testnet_verifier: true,
+             with_legacy_bridge: false,
+-            zk_token_asset_id: None,
++            zk_token_asset_id,
+             create2_factory_salt: None,
+         };
+         let eco_output = ecosystem_init(&mut runner, &sender, &owner, &eco_input).await?;
+@@ -224,7 +237,7 @@ pub async fn run(args: BootstrapArgs) -> Result<()> {
+         apply_manifest(
+             &manifest_path,
+             std::slice::from_ref(&deployer_key),
+-            None,
++            Some(&args.wallets_out),
+             &l1_rpc_url,
+             funder,
+         )
+diff --git a/bin/zk-deployer/src/commands/execute_manifest.rs b/bin/zk-deployer/src/commands/execute_manifest.rs
+--- a/bin/zk-deployer/src/commands/execute_manifest.rs
++++ b/bin/zk-deployer/src/commands/execute_manifest.rs
+@@ -166,5 +166,10 @@ pub async fn apply_manifest_from(
+ 
+     let manifest_dir = manifest_path.parent().unwrap_or_else(|| Path::new("."));
++    let executed_path = manifest_dir.join("executed").join("transactions.json");
++    if let Some(parent) = executed_path.parent() {
++        std::fs::create_dir_all(parent)
++            .with_context(|| format!("creating {}", parent.display()))?;
++    }
+ 
+     logger::info(format!("Applying {} bundle(s)...", new_bundles.len()));
+ 
+@@ -202,7 +207,7 @@ pub async fn apply_manifest_from(
+                 .with_context(|| format!("funding bundle target {target:#x}"))?;
+         }
+ 
+-        execute_one_bundle(&bundle_path, l1_rpc_url, key, None).await?;
++        execute_one_bundle(&bundle_path, l1_rpc_url, key, Some(&executed_path)).await?;
+     }
+ 
+     logger::success("All bundles applied.");

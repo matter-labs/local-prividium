@@ -1,0 +1,135 @@
+services:
+  prometheus:
+    image: prom/prometheus:v2.48.0@sha256:b440bc0e8aa5bab44a782952c09516b6a50f9d7b2325c1ffafac7bc833298e2e
+    restart: unless-stopped
+    volumes:
+      - ./dev/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./dev/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      - --web.enable-lifecycle
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  grafana:
+    image: grafana/grafana:10.2.0@sha256:1ee0c54286b8ca09a3dd1419ff8653e7780a148a006ac088544203bb0affe550
+    restart: unless-stopped
+    ports:
+      - 127.0.0.1:3100:3000
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./dev/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./dev/grafana/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
+      - ./dev/grafana/datasources/dashboards:/etc/grafana/provisioning/dashboards/files:ro
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:?Set GRAFANA_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: http://127.0.0.1:3100
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  operator-balance-exporter:
+    build:
+      context: ./dev/monitoring
+      dockerfile: Dockerfile
+    image: local/prividium-operator-balance-exporter:sandbox.1
+    restart: unless-stopped
+    environment:
+      PORT: "9102"
+      L1_RPC_URL: ${SEPOLIA_RPC_URL}
+      MANIFEST_PATH: /public/manifest.json
+    volumes:
+      - ./deployment/public:/public:ro
+    networks:
+      - app
+
+  bridge-funds:
+    build:
+      context: ./dev/bundler/contracts
+      dockerfile: Dockerfile
+      target: bridge-funds
+    image: local/prividium-bridge-funds:v1.276.0-sandbox.1
+    environment:
+      L1_RPC_URL: ${SEPOLIA_RPC_URL}
+      L2_RPC_URL: http://zksyncos:3050
+      L2_CHAIN_ID: ${L2_CHAIN_ID}
+      PRIVATE_KEYS: ${WATCHDOG_PRIVATE_KEY:?Set WATCHDOG_PRIVATE_KEY}
+      BRIDGE_SPONSOR_PRIVATE_KEY: ${BRIDGE_SPONSOR_PRIVATE_KEY:?Set BRIDGE_SPONSOR_PRIVATE_KEY}
+      TARGET_L2_BALANCE_ETH: ${SERVICE_WALLET_TARGET_L2_ETH:-0.05}
+    depends_on:
+      zksyncos:
+        condition: service_healthy
+    networks:
+      - app
+    restart: "no"
+
+  watchdog:
+    build:
+      context: https://github.com/matter-labs/watchdog.git#1edb60407b4b05eaba12f03337ef9f91e7388f27
+      dockerfile_inline: |
+        FROM node:24.18.0-alpine@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd AS builder
+        WORKDIR /app
+        COPY package.json yarn.lock ./
+        RUN yarn install --frozen-lockfile
+        COPY . .
+        RUN yarn build && yarn install --production --frozen-lockfile --prefer-offline
+        FROM node:24.18.0-alpine@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd
+        RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx \
+            && addgroup -S appgroup && adduser -S appuser -G appgroup
+        WORKDIR /app
+        USER appuser
+        COPY --from=builder --chown=appuser:appgroup /app/package.json /app/yarn.lock ./
+        COPY --from=builder --chown=appuser:appgroup /app/node_modules ./node_modules
+        COPY --from=builder --chown=appuser:appgroup /app/dist ./dist
+        ENTRYPOINT ["yarn", "start:prod"]
+    image: local/prividium-watchdog:v1.0.17-1edb604
+    platform: linux/amd64
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: info
+      WALLET_KEY: ${WATCHDOG_PRIVATE_KEY}
+      CHAIN_RPC_URL: http://prividium-api:8000/rpc
+      CHAIN_L1_RPC_URL: ${SEPOLIA_RPC_URL}
+      METRICS_PORT: "8090"
+      L2_POLLING_INTERVAL: "1000"
+      L1_POLLING_INTERVAL: "12000"
+      L2_EXECUTION_TIMEOUT: "120000"
+      FLOW_RPC_TEST_ENABLE: "1"
+      FLOW_RPC_TEST_INTERVAL: "10000"
+      FLOW_PRIVIDIUM_ENABLE: "1"
+      FLOW_PRIVIDIUM_DOMAIN: app.${SANDBOX_DOMAIN}
+      FLOW_PRIVIDIUM_API_URL: http://prividium-api:8000
+      FLOW_PRIVIDIUM_INTERVAL: "60000"
+      FLOW_TRANSFER_ENABLE: "1"
+      FLOW_TRANSFER_INTERVAL: "300000"
+      FLOW_SETTLEMENT_ENABLE: "1"
+      FLOW_SETTLEMENT_INTERVAL: "30000"
+      SETTLEMENT_DEADLINE: "1800000"
+      FLOW_DEPOSIT_ENABLE: "0"
+      FLOW_WITHDRAWAL_ENABLE: "0"
+      FLOW_WITHDRAWAL_FINALIZE_ENABLE: "0"
+    depends_on:
+      bridge-funds:
+        condition: service_completed_successfully
+      watchdog-permissions-setup:
+        condition: service_completed_successfully
+    networks:
+      - app

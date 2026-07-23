@@ -1,0 +1,140 @@
+# Optional example applications live here so their identity, funding, contract,
+# seed, and runtime services can be reviewed without the core or infrastructure
+# definitions. Profiles remain opt-in through the root Compose entrypoint.
+services:
+  institutional-demo-identity:
+    profiles: [institutional-demo]
+    image: quay.io/keycloak/keycloak:26.0@sha256:09a381c715ab0b111835b70f2905955274843a219c6f27efb348e4d9f4086858
+    platform: linux/amd64
+    entrypoint: ["/bin/bash", "/setup-demo-realm.sh"]
+    environment:
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME}
+      KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD}
+      SANDBOX_DOMAIN: ${SANDBOX_DOMAIN}
+      DEMO_USER_1_EMAIL: ${DEMO_USER_1_EMAIL:?Set DEMO_USER_1_EMAIL}
+      DEMO_USER_1_PASSWORD: ${DEMO_USER_1_PASSWORD:?Set DEMO_USER_1_PASSWORD}
+      DEMO_USER_2_EMAIL: ${DEMO_USER_2_EMAIL:?Set DEMO_USER_2_EMAIL}
+      DEMO_USER_2_PASSWORD: ${DEMO_USER_2_PASSWORD:?Set DEMO_USER_2_PASSWORD}
+    volumes:
+      - ./dev/keycloak/setup-demo-realm.sh:/setup-demo-realm.sh:ro
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    networks:
+      - app
+    restart: "no"
+
+  institutional-demo-funds:
+    profiles: [institutional-demo]
+    build:
+      context: ./dev/bundler/contracts
+      dockerfile: Dockerfile
+      target: bridge-funds
+    image: local/prividium-bridge-funds:v1.276.0-sandbox.1
+    environment:
+      L1_RPC_URL: ${SEPOLIA_RPC_URL}
+      L2_RPC_URL: http://zksyncos:3050
+      L2_CHAIN_ID: ${L2_CHAIN_ID}
+      PRIVATE_KEYS: ${INSTITUTIONAL_DEMO_DEPLOYER_PRIVATE_KEY:?Set INSTITUTIONAL_DEMO_DEPLOYER_PRIVATE_KEY}
+      BRIDGE_SPONSOR_PRIVATE_KEY: ${BRIDGE_SPONSOR_PRIVATE_KEY}
+      TARGET_L2_BALANCE_ETH: ${SERVICE_WALLET_TARGET_L2_ETH:-0.05}
+    depends_on:
+      zksyncos:
+        condition: service_healthy
+      sso-funds:
+        condition: service_completed_successfully
+    networks:
+      - app
+    restart: "no"
+
+  institutional-demo-deploy:
+    profiles: [institutional-demo]
+    image: quay.io/matterlabs_enterprise/intraday-demo-setup:single-chain@sha256:1301cedd18025988ecee634ca1a61bff5037627126b88d6ec4cc747408f4c19a
+    platform: linux/amd64
+    command: deploy
+    volumes:
+      - institutional_demo_runtime:/output
+    environment:
+      RPC_URL: http://zksyncos:3050
+      L1_RPC_URL: ${SEPOLIA_RPC_URL}
+      CHAIN_ID: ${L2_CHAIN_ID}
+      DEPLOYER_PRIVATE_KEY: ${INSTITUTIONAL_DEMO_DEPLOYER_PRIVATE_KEY}
+      DATABASE_URL: postgres://${PRIVIDIUM_DB_USER}:${PRIVIDIUM_DB_PASSWORD}@postgres:5432/${PRIVIDIUM_DB_NAME:-prividium_api}
+    depends_on:
+      institutional-demo-funds:
+        condition: service_completed_successfully
+    networks:
+      - app
+      - data
+    restart: "no"
+
+  institutional-demo-seed:
+    profiles: [institutional-demo]
+    image: quay.io/matterlabs_enterprise/intraday-demo-setup:single-chain@sha256:1301cedd18025988ecee634ca1a61bff5037627126b88d6ec4cc747408f4c19a
+    platform: linux/amd64
+    command: seed
+    volumes:
+      - institutional_demo_runtime:/output:ro
+    environment:
+      DATABASE_URL: postgres://${PRIVIDIUM_DB_USER}:${PRIVIDIUM_DB_PASSWORD}@postgres:5432/${PRIVIDIUM_DB_NAME:-prividium_api}
+    depends_on:
+      institutional-demo-deploy:
+        condition: service_completed_successfully
+      prividium-api:
+        condition: service_healthy
+      sso-permissions-setup:
+        condition: service_completed_successfully
+    networks:
+      - app
+      - data
+    restart: "no"
+
+  institutional-demo-org-setup:
+    profiles: [institutional-demo]
+    build:
+      context: ./dev/sso-setup
+      dockerfile: Dockerfile
+    image: local/prividium-sso-setup:v1.276.0-sandbox.1
+    environment:
+      DATABASE_URL: postgres://${PRIVIDIUM_DB_USER}:${PRIVIDIUM_DB_PASSWORD}@postgres:5432/${PRIVIDIUM_DB_NAME:-prividium_api}
+      KEYCLOAK_JWKS_BASE_URL: http://keycloak:8080
+      KEYCLOAK_ISSUER_BASE_URL: https://idp.${SANDBOX_DOMAIN}
+      USER_PANEL_URL: https://app.${SANDBOX_DOMAIN}
+    command: ["node", "--import", "tsx", "scripts/setup-multi-org-demo.ts"]
+    volumes:
+      - ./dev/multi-org/seed-multi-org-demo.sql:/multi-org/seed-multi-org-demo.sql:ro
+    depends_on:
+      institutional-demo-identity:
+        condition: service_completed_successfully
+      institutional-demo-seed:
+        condition: service_completed_successfully
+    networks:
+      - app
+      - data
+    restart: "no"
+
+  institutional-demo:
+    profiles: [institutional-demo]
+    image: quay.io/matterlabs_enterprise/prividium-demo-app:single-chain@sha256:4a7d0bb5fa7a3683e618c6f014df9e5e417d568ca667062542627a321174edb8
+    platform: linux/amd64
+    restart: unless-stopped
+    volumes:
+      - institutional_demo_runtime:/runtime:ro
+    environment:
+      NUXT_PUBLIC_PRIVIDIUM_CLIENT_ID: institutional-demo-client
+      NUXT_PUBLIC_PRIVIDIUM_AUTH_BASE_URL: https://app.${SANDBOX_DOMAIN}
+      NUXT_PUBLIC_PRIVIDIUM_API_BASE_URL: https://api.${SANDBOX_DOMAIN}
+      NUXT_PUBLIC_PRIVIDIUM_CHAIN_ID: ${L2_CHAIN_ID}
+      NUXT_PUBLIC_PRIVIDIUM_CHAIN_NAME: ${CHAIN_NAME:-Prividium Sandbox}
+      NUXT_PUBLIC_PRIVIDIUM_BLOCK_EXPLORER_URL: https://explorer.${SANDBOX_DOMAIN}
+      NUXT_PUBLIC_PRIVIDIUM_BLOCK_EXPLORER_NAME: Block Explorer
+      NUXT_PUBLIC_ZKSYNC_SSO_AUTH_SERVER_URL: https://auth.${SANDBOX_DOMAIN}/confirm
+    depends_on:
+      institutional-demo-org-setup:
+        condition: service_completed_successfully
+    networks:
+      - app
+
+volumes:
+  institutional_demo_runtime:

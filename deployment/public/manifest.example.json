@@ -1,0 +1,48 @@
+{
+  "generated_at": null,
+  "environment": "sandbox",
+  "l1_chain_id": 11155111,
+  "l2_chain_id": null,
+  "protocol_version": "0.31.0",
+  "protocol_version_raw": 133143986176,
+  "assets": {
+    "base_token": "ETH",
+    "protocol_fee_asset": "ETH",
+    "eth_ntv_asset_id": "0x6337a96bd2cd359fa0bae3bbedfca736753213c95037ae158c5fa7c048ae2112"
+  },
+  "sources": {
+    "zk_deployer": "16c6a83b4f634609958f347c56549ba19bf9df9b",
+    "protocol": "e091691063c99a1d0281d6fe42fb0ec4430f3673"
+  },
+  "l1_contracts": {
+    "bridgehub": null,
+    "chain_type_manager": null,
+    "bytecode_supplier": null,
+    "governance": null,
+    "rollup_da_validator": null,
+    "blob_da_validator": null,
+    "testnet_verifier": null,
+    "is_testnet_verifier": true,
+    "validator_timelock": null
+  },
+  "chain_contracts": {
+    "diamond": null,
+    "chain_admin": null
+  },
+  "operator_addresses": {
+    "commit": null,
+    "prove": null,
+    "execute": null
+  },
+  "genesis": {
+    "sha256": null,
+    "root": null,
+    "stored_batch_zero": null
+  },
+  "deployment_transactions": [],
+  "security": {
+    "proofs": "fake",
+    "verifier": "testnet",
+    "production_safe": false
+  }
+}

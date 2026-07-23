@@ -6,7 +6,6 @@
  *      domainSeparator, eip712Domain, entryPoint) plus receive() for ETH transfers
  *   3. Creates the `erc-20` template for mintable ERC-20 tokens (used by example apps)
  *   4. Creates the OAuth app for auth-server; appends SSO_CLIENT_ID to contracts.env
- *   5. Seeds base users (user1@local.dev, user2@local.dev) matching the local Keycloak realm
  *
  * Idempotent: uses ON CONFLICT DO NOTHING / DO UPDATE.
  * Bypasses the Prividium API entirely — no auth required.
@@ -20,14 +19,20 @@ import type { Abi, AbiFunction } from 'viem';
 import { parseAbi, toFunctionSelector } from 'viem';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const CONTRACTS_ENV_PATH = path.join(__dirname, '..', 'contracts.env');
-const CONTRACTS_DIR = path.join(__dirname, '..', 'contracts');
+const CONTRACTS_ENV_PATH = process.env.CONTRACTS_ENV_PATH ?? path.join(__dirname, '..', 'contracts.env');
+const CONTRACTS_DIR = process.env.CONTRACTS_DIR ?? path.join(__dirname, '..', 'contracts');
 
-const DATABASE_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@postgres:5432/prividium_api';
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) throw new Error('DATABASE_URL is required');
 
-// Fixed client ID written to contracts.env so auth-server can pick it up
-const SSO_CLIENT_ID = 'sso-local-client';
-const SSO_APP_ID = 'sso-local-app';
+const SSO_CLIENT_ID = process.env.SSO_CLIENT_ID ?? 'sso-sandbox-client';
+const SSO_APP_ID = process.env.SSO_APP_ID ?? 'sso-sandbox-app';
+const SSO_REDIRECT_URI = process.env.SSO_REDIRECT_URI;
+const SSO_ORIGIN = process.env.SSO_ORIGIN;
+
+if (!SSO_REDIRECT_URI || !SSO_ORIGIN) {
+    throw new Error('SSO_REDIRECT_URI and SSO_ORIGIN are required');
+}
 
 // Only these 5 functions on SSO smart accounts need public read access.
 // Write functions (execute, executeUserOp, etc.) go through the ERC-4337
@@ -316,42 +321,27 @@ async function main() {
         'ZKsync SSO Auth Server',
         'Web application for creating and managing passkey-based ZKsync SSO smart account wallets. Users can register WebAuthn passkeys, deploy smart accounts, and manage their wallet settings.',
         ${SSO_CLIENT_ID},
-        ARRAY['http://localhost:3006/callback']::text[],
-        'http://localhost:3006',
+        ARRAY[${SSO_REDIRECT_URI}]::text[],
+        ${SSO_ORIGIN},
         true
       )
       ON CONFLICT (oauth_client_id) DO UPDATE SET
         is_public = true,
-        description = EXCLUDED.description
+        description = EXCLUDED.description,
+        oauth_redirect_uris = EXCLUDED.oauth_redirect_uris,
+        origin = EXCLUDED.origin
     `;
 
         appendEnv('SSO_CLIENT_ID', SSO_CLIENT_ID);
 
         console.log(`✅ Seeded OAuth app: clientId=${SSO_CLIENT_ID}`);
-        // ── 5. Base users (matching local Keycloak realm) ─────────────────────────
-        // These users exist in realm-export.json with fixed sub UUIDs.
-        // Seeded here so example apps can link wallets without re-creating the user records.
-        const BASE_USERS = [
-            { id: 'local-user1', display: 'user1@local.dev', sub: '00000000-0000-0000-0000-000000000004' },
-            { id: 'local-user2', display: 'user2@local.dev', sub: '00000000-0000-0000-0000-000000000005' }
-        ];
-
-        for (const user of BASE_USERS) {
-            await sql`
-        INSERT INTO users (id, display_name, oidc_sub, source)
-        VALUES (${user.id}, ${user.display}, ${user.sub}, 'oidc')
-        ON CONFLICT (id) DO NOTHING
-      `;
-            console.log(`✅ Base user: ${user.display}`);
-        }
-
-        console.log(`\n✅ Core permissions seed complete (SSO + ERC-20 template + base users).`);
+        console.log(`\n✅ SSO permissions seed complete.`);
     } finally {
         await sql.end();
     }
 }
 
 main().catch((err) => {
-    console.error('❌ SSO seed failed:', err);
+    console.error('❌ SSO permissions seed failed:', err);
     process.exit(1);
 });

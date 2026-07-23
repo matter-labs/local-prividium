@@ -2,16 +2,14 @@
 # Deploy EntryPoint contracts with deterministic addresses
 # Uses pre-compiled bytecode from the official deployment to ensure matching addresses
 
-set -e
+set -Eeuo pipefail
 
 SCRIPT_DIR="$(dirname "$0")"
 cd "$SCRIPT_DIR/.."
 
-# Ensure soldeer dependencies are installed
-forge soldeer install
-
-RPC_URL="${RPC_URL:-http://localhost:5050}"
-PRIVATE_KEY="${PRIVATE_KEY:-0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80}"
+: "${RPC_URL:?RPC_URL is required}"
+: "${PRIVATE_KEY:?PRIVATE_KEY is required}"
+FACTORY_DEPLOYER_FUNDING_ETH="${FACTORY_DEPLOYER_FUNDING_ETH:-0.012}"
 
 # CREATE2 factory addresses (from deterministic-deployment-proxy)
 # See: https://github.com/Arachnid/deterministic-deployment-proxy
@@ -31,12 +29,36 @@ FACTORY_DEPLOY_TX="0xf8a58085174876e800830186a08080b853604580600e600039806000f35
 # Path to the official deployment JSON with pre-compiled bytecode
 ENTRYPOINT_DEPLOYMENT="dependencies/eth-infinitism-account-abstraction-0.8.0/deployments/ethereum/EntryPoint.json"
 
+if [ ! -f "$ENTRYPOINT_DEPLOYMENT" ]; then
+    echo "ERROR: EntryPoint deployment file not found at $ENTRYPOINT_DEPLOYMENT"
+    exit 1
+fi
+EXPECTED_ENTRYPOINT_RUNTIME=$(sed -nE 's/.*"deployedBytecode" *: *"(0x)?([^"]*)".*/\2/p' "$ENTRYPOINT_DEPLOYMENT")
+if [ -z "$EXPECTED_ENTRYPOINT_RUNTIME" ]; then
+    echo "ERROR: EntryPoint runtime bytecode is missing from $ENTRYPOINT_DEPLOYMENT"
+    exit 1
+fi
+EXPECTED_ENTRYPOINT_CODE_HASH=$(cast keccak "0x${EXPECTED_ENTRYPOINT_RUNTIME}")
+
+verify_entrypoint_code() {
+    local code="$1"
+    local actual_hash
+    actual_hash=$(cast keccak "$code")
+    if [ "$actual_hash" != "$EXPECTED_ENTRYPOINT_CODE_HASH" ]; then
+        echo "ERROR: Unexpected bytecode at $ENTRYPOINT_ADDRESS"
+        echo "Expected runtime hash: $EXPECTED_ENTRYPOINT_CODE_HASH"
+        echo "Actual runtime hash:   $actual_hash"
+        exit 1
+    fi
+}
+
 # Check if EntryPoint is already deployed
 echo "Checking if EntryPoint is already deployed at $ENTRYPOINT_ADDRESS..."
-ENTRYPOINT_CODE=$(cast code $ENTRYPOINT_ADDRESS --rpc-url $RPC_URL 2>/dev/null || echo "0x")
+ENTRYPOINT_CODE=$(cast code "$ENTRYPOINT_ADDRESS" --rpc-url "$RPC_URL" 2>/dev/null || echo "0x")
 
 if [ "$ENTRYPOINT_CODE" != "0x" ] && [ -n "$ENTRYPOINT_CODE" ]; then
-    echo "EntryPoint already deployed at $ENTRYPOINT_ADDRESS"
+    verify_entrypoint_code "$ENTRYPOINT_CODE"
+    echo "EntryPoint already deployed and runtime bytecode matches at $ENTRYPOINT_ADDRESS"
     exit 0
 fi
 
@@ -50,17 +72,22 @@ FACTORY_CODE=$(cast code $CREATE2_FACTORY --rpc-url $RPC_URL 2>/dev/null || echo
 if [ "$FACTORY_CODE" = "0x" ] || [ -z "$FACTORY_CODE" ]; then
     echo "CREATE2 factory not found, deploying..."
 
-    # Fund the factory deployer (needs ~0.1 ETH for gas)
+    # The pre-signed transaction uses 100,000 gas at 100 gwei (0.01 ETH).
+    # Keep a small buffer without carrying the former 0.1 ETH local-dev assumption.
     echo "Funding factory deployer at $FACTORY_DEPLOYER..."
-    cast send $FACTORY_DEPLOYER --legacy --value 0.1ether --private-key $PRIVATE_KEY --rpc-url $RPC_URL
+    cast send "$FACTORY_DEPLOYER" \
+        --legacy \
+        --value "${FACTORY_DEPLOYER_FUNDING_ETH}ether" \
+        --private-key "$PRIVATE_KEY" \
+        --rpc-url "$RPC_URL"
 
     # Send the pre-signed deployment transaction
     echo "Deploying CREATE2 factory..."
-    cast publish $FACTORY_DEPLOY_TX --rpc-url $RPC_URL
+    cast publish "$FACTORY_DEPLOY_TX" --rpc-url "$RPC_URL"
 
     # Verify deployment
     sleep 2
-    FACTORY_CODE=$(cast code $CREATE2_FACTORY --rpc-url $RPC_URL)
+    FACTORY_CODE=$(cast code "$CREATE2_FACTORY" --rpc-url "$RPC_URL")
     if [ "$FACTORY_CODE" = "0x" ] || [ -z "$FACTORY_CODE" ]; then
         echo "ERROR: CREATE2 factory deployment failed"
         exit 1
@@ -72,10 +99,6 @@ fi
 
 # Extract pre-compiled bytecode from official deployment
 echo "Extracting pre-compiled EntryPoint bytecode..."
-if [ ! -f "$ENTRYPOINT_DEPLOYMENT" ]; then
-    echo "ERROR: EntryPoint deployment file not found at $ENTRYPOINT_DEPLOYMENT"
-    exit 1
-fi
 
 # Get bytecode and remove 0x prefix for concatenation
 BYTECODE=$(sed -nE 's/.*"bytecode" *: *"(0x)?([^"]*)".*/\2/p' "$ENTRYPOINT_DEPLOYMENT")
@@ -88,16 +111,17 @@ SALT_NO_PREFIX=$(echo $SALT | sed 's/^0x//')
 PAYLOAD="0x${SALT_NO_PREFIX}${BYTECODE}"
 
 echo "Deploying EntryPoint via CREATE2 factory..."
-RESULT=$(cast send --legacy $CREATE2_FACTORY "$PAYLOAD" --private-key $PRIVATE_KEY --rpc-url $RPC_URL --json 2>&1)
+RESULT=$(cast send --legacy "$CREATE2_FACTORY" "$PAYLOAD" --private-key "$PRIVATE_KEY" --rpc-url "$RPC_URL" --json 2>&1)
 
 # Verify deployment
 sleep 2
-DEPLOYED_CODE=$(cast code $ENTRYPOINT_ADDRESS --rpc-url $RPC_URL 2>/dev/null || echo "0x")
+DEPLOYED_CODE=$(cast code "$ENTRYPOINT_ADDRESS" --rpc-url "$RPC_URL" 2>/dev/null || echo "0x")
 
 if [ "$DEPLOYED_CODE" = "0x" ] || [ -z "$DEPLOYED_CODE" ]; then
     echo "ERROR: EntryPoint deployment failed"
     echo "Expected address: $ENTRYPOINT_ADDRESS"
     exit 1
 fi
+verify_entrypoint_code "$DEPLOYED_CODE"
 
 echo "EntryPoint deployed successfully at $ENTRYPOINT_ADDRESS"

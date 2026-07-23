@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+funding_policy_mode=release
+if [[ "${1:-}" == "--allow-unbenchmarked" ]]; then
+  funding_policy_mode=structure
+  shift
+fi
+environment_file="${1:-${repo_root}/deployment/sandbox.env.example}"
+rendered=$(mktemp)
+images=$(mktemp)
+default_services=$(mktemp)
+trap 'rm -f "$rendered" "$images" "$default_services"' EXIT
+
+cd "$repo_root"
+
+source "${repo_root}/tools/lib/funding-policy.sh"
+sandbox_validate_funding_policy \
+  "${repo_root}/deployment/funding-policy.json" \
+  "$funding_policy_mode"
+while IFS= read -r locked_release_value; do
+  if ! grep -Fq "$locked_release_value" "${repo_root}/deployment/versions.lock.yaml"; then
+    echo "Funding policy release value is absent from deployment/versions.lock.yaml: ${locked_release_value}" >&2
+    exit 1
+  fi
+done < <(
+  jq -r '
+    .release |
+    [
+      .protocol,
+      .protocol_commit,
+      .zksync_os_server,
+      .zksync_os_server_commit,
+      .zk_deployer_commit,
+      .prividium,
+      .prividium_commit,
+      .watchdog,
+      .watchdog_commit
+    ][]
+  ' "${repo_root}/deployment/funding-policy.json"
+)
+
+compose_modules=(
+  docker-compose-platform.yaml
+  docker-compose-permissioning.yaml
+  docker-compose-explorer.yaml
+  docker-compose-monitoring.yaml
+  docker-compose-optional.yaml
+  docker-compose-demos.yaml
+)
+for module in "${compose_modules[@]}"; do
+  if [[ ! -s "$module" ]]; then
+    echo "Compose module is missing or empty: ${module}" >&2
+    exit 1
+  fi
+  if ! grep -Fq -- "- ${module}" docker-compose.yaml; then
+    echo "Root Compose entrypoint does not include ${module}" >&2
+    exit 1
+  fi
+done
+if [[ -e docker-compose-deps.yaml || -e docker-compose-examples.yaml ]]; then
+  echo "Legacy monolithic Compose files must not be restored" >&2
+  exit 1
+fi
+if grep -Eq '^  institutional-demo[^:]*:' docker-compose-optional.yaml; then
+  echo "Demo services must remain isolated in docker-compose-demos.yaml" >&2
+  exit 1
+fi
+if ! grep -Eq '^  institutional-demo:' docker-compose-demos.yaml; then
+  echo "docker-compose-demos.yaml does not define the institutional demo app" >&2
+  exit 1
+fi
+
+docker compose --env-file "$environment_file" config --services >"$default_services"
+compose_profiles=(--profile chain-bootstrap --profile sso --profile webhook --profile institutional-demo)
+docker compose --env-file "$environment_file" "${compose_profiles[@]}" config >"$rendered"
+docker compose --env-file "$environment_file" "${compose_profiles[@]}" config --images >"$images"
+
+if grep -Eqi 'https?://localhost|host\.docker\.internal|image:.*:latest([@[:space:]]|$)|^[[:space:]]+l1:[[:space:]]*$' "$rendered"; then
+  echo "Rendered Compose contains a local-only host, Anvil, or a latest image" >&2
+  exit 1
+fi
+if grep -Eq '31337|(^|[^0-9])6565([^0-9]|$)|424242' "$rendered"; then
+  echo "Rendered Compose contains a legacy local chain ID" >&2
+  exit 1
+fi
+if grep -Eqi 'ac0974|59c699|5de411|8b3a350|7726827c|aaaaaaaa00000000' "$rendered"; then
+  echo "Rendered Compose contains a known deterministic development secret" >&2
+  exit 1
+fi
+
+for optional_service in \
+  auth-server auth-server-api bundler contracts-extractor entrypoint-deployer \
+  sso-contracts-deployer sso-funds sso-permissions-setup sso-runtime-init \
+  webhook-permissions-setup zksync-webhook-service \
+  institutional-demo institutional-demo-deploy institutional-demo-funds \
+  institutional-demo-identity institutional-demo-org-setup institutional-demo-seed; do
+  if grep -Fxq "$optional_service" "$default_services"; then
+    echo "Optional service is enabled in the default profile: ${optional_service}" >&2
+    exit 1
+  fi
+done
+
+while IFS= read -r image; do
+  [[ "$image" == local/* ]] && continue
+  if [[ "$image" != *@sha256:* ]]; then
+    echo "Unpinned remote image: ${image}" >&2
+    exit 1
+  fi
+done <"$images"
+
+published=$(awk '
+  /^[[:space:]]+published:/ { gsub(/"/, "", $2); print $2 }
+' "$rendered" | sort -u | tr '\n' ' ')
+if [[ "$published" != "3100 443 80 " && "$published" != "3100 80 443 " ]]; then
+  echo "Unexpected published port set: ${published}" >&2
+  exit 1
+fi
+if ! grep -B8 -A2 'published: "3100"' "$rendered" | grep -q 'host_ip: 127.0.0.1'; then
+  echo "Grafana must be bound to loopback" >&2
+  exit 1
+fi
+
+if [[ "$(jq '.users | length' dev/keycloak/realm-export.json)" != "1" ]]; then
+  echo "The core Keycloak realm must contain exactly one sandbox administrator" >&2
+  exit 1
+fi
+
+for dockerfile in dev/bundler/contracts/Dockerfile dev/sso-setup/Dockerfile dev/monitoring/Dockerfile dev/chain-bootstrap/Dockerfile; do
+  if grep -E '^FROM ' "$dockerfile" | grep -vq '@sha256:'; then
+    echo "Unpinned Dockerfile base in ${dockerfile}" >&2
+    exit 1
+  fi
+done
+
+if grep -En \
+  'REPLACE_WITH_RANDOM|https://private-|SEPOLIA_RPC_URL=|PRIVATE_KEY=|PASSWORD=' \
+  deployment/public/*.md >/dev/null; then
+  echo "A public Markdown report example appears to contain a secret or private provider value" >&2
+  exit 1
+fi
+
+echo "Sandbox Compose static validation passed"

@@ -1,0 +1,87 @@
+services:
+  block-explorer-api:
+    image: ghcr.io/matter-labs/block-explorer-api:v3.29.5@sha256:97880d701fe79b68e1e3f4f758851e67c11bacc1d3cdbe4fed618771f4360cb4
+    platform: linux/amd64
+    restart: unless-stopped
+    environment:
+      LOG_LEVEL: info
+      NODE_ENV: production
+      DATABASE_HOST: postgres
+      DATABASE_NAME: ${EXPLORER_DB_NAME:-prividium_block_explorer}
+      DATABASE_USER: ${EXPLORER_DB_USER}
+      DATABASE_PASSWORD: ${EXPLORER_DB_PASSWORD}
+      DATABASE_ENABLE_SSL: "false"
+      CHAIN_ID: ${L2_CHAIN_ID}
+      NETWORK_NAME: ${CHAIN_NAME:-Prividium Sandbox}
+      PRIVIDIUM: "true"
+      PRIVIDIUM_APP_URL: https://explorer.${SANDBOX_DOMAIN}
+      PRIVIDIUM_CORS_ORIGINS: https://explorer.${SANDBOX_DOMAIN}
+      PRIVIDIUM_PERMISSIONS_API_URL: http://prividium-api:8000
+      PRIVIDIUM_SESSION_SECRET: ${EXPLORER_SESSION_SECRET:?Set EXPLORER_SESSION_SECRET}
+      PRIVIDIUM_SESSION_MAX_AGE: "86400000"
+      PRIVIDIUM_SESSION_SAME_SITE: strict
+      LIMITED_PAGINATION_MAX_ITEMS: "10000"
+      API_LIMITED_PAGINATION_MAX_ITEMS: "1000"
+      DISABLE_BFF_API_SCHEMA_DOCS: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - app
+      - data
+
+  block-explorer-app:
+    image: ghcr.io/matter-labs/block-explorer-app:v3.29.5@sha256:a366db942c61fe3c361881fd6c1596daf29a5d5e7c1631d18e07711b47ca12e6
+    platform: linux/amd64
+    restart: unless-stopped
+    volumes:
+      - ${RUNTIME_DIR:-/etc/prividium/runtime}/block-explorer-config.js:/usr/share/nginx/html/config.js:ro
+    depends_on:
+      block-explorer-api:
+        condition: service_started
+    networks:
+      - app
+
+  block-explorer-worker:
+    image: ghcr.io/matter-labs/block-explorer-worker:v3.29.5@sha256:1bdbdf3ded5a9902b01d624b8704fce5f977a74db34b86a557eaa18e99480efe
+    platform: linux/amd64
+    restart: unless-stopped
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_NAME: ${EXPLORER_DB_NAME:-prividium_block_explorer}
+      DATABASE_USER: ${EXPLORER_DB_USER}
+      DATABASE_PASSWORD: ${EXPLORER_DB_PASSWORD}
+      DATABASE_ENABLE_SSL: "false"
+      NETWORK_NAME: ${CHAIN_NAME:-Prividium Sandbox}
+      BLOCKCHAIN_RPC_URL: http://zksyncos:3050
+      DATA_FETCHER_URL: http://block-explorer-data-fetcher:3040
+      PRIVIDIUM: "true"
+      PRIVIDIUM_PERMISSIONS_API_URL: http://prividium-api:8000/api
+      ENABLE_TOKEN_OFFCHAIN_DATA_SAVER: "true"
+      BLOCKS_PROCESSING_BATCH_SIZE: "10"
+      NUMBER_OF_BLOCKS_PER_DB_TRANSACTION: "10"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      zksyncos:
+        condition: service_healthy
+      block-explorer-data-fetcher:
+        condition: service_started
+    networks:
+      - app
+      - data
+
+  block-explorer-data-fetcher:
+    image: ghcr.io/matter-labs/block-explorer-data-fetcher:v3.29.5@sha256:c3731530bc9544d3d80e68c0d8b59b6c78060498b9cdce455340a3ec882af209
+    platform: linux/amd64
+    restart: unless-stopped
+    environment:
+      NETWORK_NAME: ${CHAIN_NAME:-Prividium Sandbox}
+      BLOCKCHAIN_RPC_URL: http://zksyncos:3050
+      PRIVIDIUM: "true"
+      PRIVIDIUM_PERMISSIONS_API_URL: http://prividium-api:8000/api
+    depends_on:
+      zksyncos:
+        condition: service_healthy
+    networks:
+      - app

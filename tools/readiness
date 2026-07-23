@@ -1,0 +1,343 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+
+repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+encrypted_file="${SANDBOX_SECRETS_FILE:-${repo_root}/deployment/secrets/sandbox.enc.env}"
+runtime_environment="${SANDBOX_ENV_FILE:-/etc/prividium/runtime/sandbox.env}"
+policy_file="${FUNDING_POLICY_FILE:-${repo_root}/deployment/funding-policy.json}"
+public_manifest="${PUBLIC_MANIFEST_PATH:-${repo_root}/deployment/public/manifest.json}"
+role_report="${ROLE_REPORT_PATH:-${repo_root}/deployment/public/roles.md}"
+from_environment=false
+
+if [[ "${1:-}" == "--from-environment" ]]; then
+  from_environment=true
+  shift
+fi
+
+if [[ "$from_environment" != "true" ]]; then
+  command -v sops >/dev/null || {
+    echo "sops is required to verify the encrypted sandbox environment" >&2
+    exit 1
+  }
+  if [[ ! -s "$encrypted_file" ]]; then
+    echo "Encrypted sandbox environment not found: ${encrypted_file}" >&2
+    exit 1
+  fi
+  if [[ ! -s "$runtime_environment" ]]; then
+    echo "Runtime environment not found: ${runtime_environment}" >&2
+    echo "Run: tools/sandbox decrypt" >&2
+    exit 1
+  fi
+  export PRIVIDIUM_READINESS_SCRIPT="${BASH_SOURCE[0]}"
+  export SANDBOX_ENCRYPTED_FILE="$encrypted_file"
+  export SANDBOX_RUNTIME_ENVIRONMENT="$runtime_environment"
+  export FUNDING_POLICY_FILE="$policy_file"
+  export PUBLIC_MANIFEST_PATH="$public_manifest"
+  export ROLE_REPORT_PATH="$role_report"
+  exec sops exec-env "$encrypted_file" \
+    'exec "$PRIVIDIUM_READINESS_SCRIPT" --from-environment'
+fi
+
+source "${repo_root}/tools/lib/sandbox-roles.sh"
+source "${repo_root}/tools/lib/funding-policy.sh"
+
+: "${SANDBOX_DOMAIN:?SANDBOX_DOMAIN is missing from the encrypted environment}"
+: "${L2_CHAIN_ID:?L2_CHAIN_ID is missing from the encrypted environment}"
+: "${SEPOLIA_RPC_URL:?SEPOLIA_RPC_URL is missing from the encrypted environment}"
+: "${RUNTIME_DIR:?RUNTIME_DIR is missing from the encrypted environment}"
+
+runtime_dir="$RUNTIME_DIR"
+if [[ "$runtime_dir" != /* ]]; then
+  runtime_dir="${repo_root}/${runtime_dir}"
+fi
+report_path="${READINESS_REPORT_PATH:-${runtime_dir}/reports/readiness.md}"
+funding_report_path="${FUNDING_REPORT_PATH:-${runtime_dir}/reports/funding-plan.md}"
+blocking_checks=()
+warning_checks=()
+passed_checks=()
+
+pass_check() {
+  passed_checks+=("$1")
+}
+
+warn_check() {
+  warning_checks+=("$1")
+}
+
+block_check() {
+  blocking_checks+=("$1")
+}
+
+file_mode() {
+  if stat -c '%a' "$1" >/dev/null 2>&1; then
+    stat -c '%a' "$1"
+  else
+    stat -f '%Lp' "$1"
+  fi
+}
+
+for required_command in docker cast jq curl; do
+  if command -v "$required_command" >/dev/null; then
+    pass_check "Required command is available: ${required_command}"
+  else
+    block_check "Required command is missing: ${required_command}"
+  fi
+done
+
+encrypted_path="${SANDBOX_ENCRYPTED_FILE:-$encrypted_file}"
+runtime_env_path="${SANDBOX_RUNTIME_ENVIRONMENT:-$runtime_environment}"
+if [[ -s "$encrypted_path" ]]; then
+  encrypted_mode=$(file_mode "$encrypted_path")
+  if (( (8#$encrypted_mode & 0022) == 0 )); then
+    pass_check "SOPS-encrypted environment is decryptable and not group/world writable"
+  else
+    block_check "SOPS-encrypted environment must not be group/world writable; found mode ${encrypted_mode}"
+  fi
+else
+  block_check "SOPS-encrypted environment is missing: ${encrypted_path}"
+fi
+if [[ -s "$runtime_env_path" ]]; then
+  mode=$(file_mode "$runtime_env_path")
+  if [[ "$mode" == "600" ]]; then
+    pass_check "Decrypted runtime environment has mode 0600"
+  else
+    block_check "Decrypted runtime environment must have mode 0600; found ${mode}"
+  fi
+else
+  block_check "Decrypted runtime environment is missing: ${runtime_env_path}"
+fi
+
+if sandbox_validate_distinct_roles >/dev/null 2>&1; then
+  pass_check "All generated sandbox identities are valid and distinct"
+else
+  block_check "Generated sandbox identities are missing, invalid, or reused"
+fi
+
+if [[ -s "$role_report" ]] && command -v cast >/dev/null 2>&1; then
+  current_fingerprint=$(sandbox_role_fingerprint)
+  report_fingerprint=$(sed -n 's/.*Role-set fingerprint: `\([^`]*\)`.*/\1/p' "$role_report" | head -n 1)
+  if [[ "$current_fingerprint" == "$report_fingerprint" ]]; then
+    pass_check "Public role inventory matches the encrypted signer set"
+  else
+    block_check "Public role inventory does not match the encrypted signer set; run tools/sandbox roles"
+  fi
+else
+  block_check "Public role inventory is missing; run tools/sandbox roles"
+fi
+
+if sandbox_validate_funding_policy "$policy_file" >/dev/null 2>&1; then
+  pass_check "Core funding policy is release-benchmarked and within the 1 ETH boundary"
+else
+  policy_error=$(sandbox_validate_funding_policy "$policy_file" 2>&1 || true)
+  block_check "Funding policy is not release-ready: ${policy_error//$'\n'/ }"
+fi
+
+if command -v cast >/dev/null 2>&1; then
+  if actual_chain_id=$(cast chain-id --rpc-url "$SEPOLIA_RPC_URL" 2>/dev/null); then
+    if [[ "$actual_chain_id" == "11155111" ]]; then
+      pass_check "Private L1 RPC is Ethereum Sepolia"
+    else
+      block_check "Private L1 RPC returned chain ID ${actual_chain_id}, expected 11155111"
+    fi
+  else
+    block_check "Private Sepolia RPC is unreachable"
+  fi
+
+  source "${repo_root}/dev/chain-bootstrap/rpc-capabilities.sh"
+  rpc_probe_error=$(mktemp)
+  if probe_sepolia_rpc_capabilities "$SEPOLIA_RPC_URL" 2>"$rpc_probe_error"; then
+    pass_check "Private RPC supports historical calls, logs, receipts, and blob fee data"
+  else
+    block_check "Private RPC capability probe failed; verify historical calls/logs, receipts, and blob fee support"
+  fi
+  rm -f "$rpc_probe_error"
+fi
+
+if [[ "$L2_CHAIN_ID" =~ ^[0-9]+$ ]] &&
+   (( L2_CHAIN_ID >= 1073741824 && L2_CHAIN_ID <= 2147483647 )); then
+  pass_check "L2 chain ID ${L2_CHAIN_ID} is in the required high 31-bit range"
+else
+  block_check "L2 chain ID must be in the range 1073741824..2147483647"
+fi
+
+chainlist_file=$(mktemp)
+if curl --fail --silent --show-error --location \
+  https://chainid.network/chains.json --output "$chainlist_file"; then
+  if jq -e --argjson id "$L2_CHAIN_ID" 'any(.[]; .chainId == $id)' "$chainlist_file" >/dev/null; then
+    block_check "L2 chain ID ${L2_CHAIN_ID} is already registered in Chainlist"
+  else
+    pass_check "L2 chain ID ${L2_CHAIN_ID} is not registered in Chainlist"
+  fi
+else
+  block_check "Unable to retrieve Chainlist for the collision check"
+fi
+rm -f "$chainlist_file"
+
+prepared_manifest="${runtime_dir}/chain/out/manifest.json"
+preparation_record="${runtime_dir}/chain/out/preparation.json"
+expected_protocol_commit="e091691063c99a1d0281d6fe42fb0ec4430f3673"
+expected_deployer_commit="16c6a83b4f634609958f347c56549ba19bf9df9b"
+if [[ -s "$prepared_manifest" && -s "$preparation_record" ]]; then
+  prepared_manifest_sha=$(sandbox_sha256 <"$prepared_manifest")
+  if jq -e \
+    --argjson chain_id "$L2_CHAIN_ID" \
+    --arg protocol "$expected_protocol_commit" \
+    --arg deployer "$expected_deployer_commit" \
+    --arg manifest_sha "$prepared_manifest_sha" \
+    '
+      .schema_version == 1 and
+      .l1_chain_id == 11155111 and
+      .l2_chain_id == $chain_id and
+      .sources.protocol == $protocol and
+      .sources.zk_deployer == $deployer and
+      .prepared_manifest_sha256 == $manifest_sha
+    ' "$preparation_record" >/dev/null; then
+    pass_check "Bootstrap preparation is bound to the chain ID and locked Protocol/deployer sources"
+  else
+    block_check "Bootstrap preparation provenance does not match the chain ID, source locks, or manifest hash"
+  fi
+else
+  block_check "Bootstrap manifest or preparation provenance is missing; run tools/sandbox prepare"
+fi
+
+if grep -Fq "$expected_protocol_commit" "${repo_root}/deployment/versions.lock.yaml" &&
+   grep -Fq "$expected_deployer_commit" "${repo_root}/deployment/versions.lock.yaml"; then
+  pass_check "Protocol and zk-deployer source locks match the sandbox release"
+else
+  block_check "Protocol or zk-deployer source locks do not match the expected release"
+fi
+
+if [[ -s "$public_manifest" ]]; then
+  existing_chain_id=$(jq -r '.l2_chain_id // empty' "$public_manifest" 2>/dev/null || true)
+  block_check "Public chain manifest already exists for L2 chain ${existing_chain_id:-unknown}; broadcast is not a new deployment"
+else
+  pass_check "No conflicting public chain manifest exists"
+fi
+
+if FUNDING_REPORT_PATH="$funding_report_path" \
+  "${repo_root}/tools/funding" --from-environment plan >/dev/null 2>&1; then
+  pass_check "Sandbox funding wallet and all core roles satisfy the funding plan"
+else
+  funding_status=$?
+  if [[ "$funding_status" == "2" ]]; then
+    block_check "Sandbox funding wallet cannot cover the current core funding plan"
+  else
+    block_check "Core funding plan could not be validated"
+  fi
+fi
+
+architecture=$(uname -m)
+if [[ "$architecture" == "x86_64" || "$architecture" == "amd64" ]]; then
+  pass_check "Deployment host architecture is amd64"
+else
+  block_check "Deployment host architecture is ${architecture}; amd64 is required"
+fi
+if docker compose version >/dev/null 2>&1 &&
+   docker info >/dev/null 2>&1; then
+  pass_check "Docker daemon and Docker Compose v2 are available"
+else
+  block_check "Docker daemon or Docker Compose v2 is unavailable"
+fi
+if "${repo_root}/tools/validate-stack" "$runtime_env_path" >/dev/null 2>&1; then
+  pass_check "Complete Compose model passes static validation"
+else
+  block_check "Complete Compose model failed static validation"
+fi
+
+if command -v docker >/dev/null 2>&1; then
+  registry_failed=false
+  for image in \
+    quay.io/matterlabs_enterprise/prividium-permissions-api:v1.276.0@sha256:d4c0bfe0d1716429cd7239916d4a05453350ecdc936929eeebb9f66e8c130723 \
+    quay.io/matterlabs_enterprise/prividium-user-panel:v1.276.0@sha256:17310c2070ddc86fbef9181ceb1c9874c165965c0d07e23714bee046309cc401 \
+    quay.io/matterlabs_enterprise/prividium-adminv2:v1.276.0@sha256:2607a967b717af9bc21642514f929eea31c1e965570257f083cbca6314a42f41; do
+    if ! docker manifest inspect "$image" >/dev/null 2>&1; then
+      registry_failed=true
+      break
+    fi
+  done
+  if [[ "$registry_failed" == "true" ]]; then
+    block_check "Required private Prividium images are not accessible with the current registry credentials"
+  else
+    pass_check "Required private Prividium images are accessible"
+  fi
+fi
+
+for label in app admin api explorer explorer-api idp; do
+  hostname="${label}.${SANDBOX_DOMAIN}"
+  resolved=false
+  if command -v getent >/dev/null 2>&1 && getent ahosts "$hostname" >/dev/null 2>&1; then
+    resolved=true
+  elif command -v dscacheutil >/dev/null 2>&1 &&
+    dscacheutil -q host -a name "$hostname" | grep -q ip_address; then
+    resolved=true
+  elif command -v host >/dev/null 2>&1 && host "$hostname" >/dev/null 2>&1; then
+    resolved=true
+  fi
+  if [[ "$resolved" == "true" ]]; then
+    pass_check "DNS resolves: ${hostname}"
+  else
+    warn_check "DNS does not yet resolve: ${hostname}"
+  fi
+done
+
+if (( ${#blocking_checks[@]} )); then
+  overall_status="BLOCKED"
+elif (( ${#warning_checks[@]} )); then
+  overall_status="READY WITH WARNINGS"
+else
+  overall_status="READY"
+fi
+
+report_tmp=$(mktemp)
+{
+  echo "# Prividium sandbox pre-broadcast readiness"
+  echo
+  echo "- Generated: \`$(date -u +%Y-%m-%dT%H:%M:%SZ)\`"
+  echo "- Sandbox domain: \`${SANDBOX_DOMAIN}\`"
+  echo "- L2 chain ID: \`${L2_CHAIN_ID}\`"
+  echo "- Status: **${overall_status}**"
+  echo
+  echo "## Passed"
+  echo
+  if (( ${#passed_checks[@]} )); then
+    for message in "${passed_checks[@]}"; do
+      echo "- [x] ${message}"
+    done
+  else
+    echo "- None"
+  fi
+  echo
+  echo "## Warnings"
+  echo
+  if (( ${#warning_checks[@]} )); then
+    for message in "${warning_checks[@]}"; do
+      echo "- [ ] ${message}"
+    done
+  else
+    echo "- None"
+  fi
+  echo
+  echo "## Blocking issues"
+  echo
+  if (( ${#blocking_checks[@]} )); then
+    for message in "${blocking_checks[@]}"; do
+      echo "- [ ] ${message}"
+    done
+  else
+    echo "- None"
+  fi
+  echo
+  echo "This report contains no private keys, passwords, or provider URLs."
+} >"$report_tmp"
+
+mkdir -p "$(dirname "$report_path")"
+install -m 0600 "$report_tmp" "$report_path"
+rm -f "$report_tmp"
+cat "$report_path"
+echo
+echo "Protected readiness report written to ${report_path}"
+
+if [[ "$overall_status" == "BLOCKED" ]]; then
+  exit 1
+fi

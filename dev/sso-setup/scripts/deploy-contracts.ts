@@ -1,7 +1,6 @@
 /**
- * Deploys the 8 SSO system contracts to the local ZKsync chain using a dedicated
- * deployer wallet (Anvil key #2). Writes the deployed addresses and bytecode hash
- * to dev/sso-setup/contracts.env so docker-compose can inject them into prividium-api.
+ * Deploys the SSO system contracts to the configured sandbox chain and writes
+ * their addresses to the protected runtime volume shared by the long-running services.
  *
  * Idempotent: skips contracts that already have code at their expected addresses.
  */
@@ -13,8 +12,6 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-import { ETH_ADDRESS } from '@matterlabs/zksync-js/core';
-import { createViemClient, createViemSdk } from '@matterlabs/zksync-js/viem';
 import {
     type Abi,
     type Address,
@@ -22,26 +19,29 @@ import {
     createWalletClient,
     defineChain,
     type Hex,
+    formatEther,
     http,
-    keccak256,
-    parseEther
+    keccak256
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { anvil } from 'viem/chains';
 
-// Anvil key #2 — dedicated SSO deployer, not used by any other service
-const SSO_DEPLOYER_PK = (process.env.DEPLOYER_PRIVATE_KEY ??
-    '0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a') as `0x${string}`;
+function required(name: string): string {
+    const value = process.env[name]?.trim();
+    if (!value) throw new Error(`${name} is required`);
+    return value;
+}
 
-const L1_RPC = process.env.L1_RPC_URL ?? 'http://l1:5010';
-const L2_RPC = process.env.RPC_URL ?? 'http://zksyncos:3050';
-const CHAIN_ID = Number(process.env.CHAIN_ID ?? '6565');
+const SSO_DEPLOYER_PK = required('DEPLOYER_PRIVATE_KEY') as `0x${string}`;
+const L2_RPC = required('RPC_URL');
+const CHAIN_ID = Number(required('CHAIN_ID'));
+const CHAIN_NAME = process.env.CHAIN_NAME ?? 'Prividium Sandbox';
 const ENTRY_POINT_ADDRESS = (process.env.ENTRY_POINT_ADDRESS ??
     '0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108') as Address;
+const MIN_L2_BALANCE = BigInt(process.env.MIN_L2_BALANCE_WEI ?? '10000000000000000');
+const SSO_CLIENT_ID = process.env.SSO_CLIENT_ID ?? 'sso-sandbox-client';
 
-const CONTRACTS_ENV_PATH = path.join(__dirname, '..', 'contracts.env');
-const CONTRACTS_DIR = path.join(__dirname, '..', 'contracts');
-const BRIDGE_AMOUNT = parseEther('10');
+const CONTRACTS_ENV_PATH = process.env.CONTRACTS_ENV_PATH ?? path.join(__dirname, '..', 'contracts.env');
+const CONTRACTS_DIR = process.env.CONTRACTS_DIR ?? path.join(__dirname, '..', 'contracts');
 
 // Load contract artifacts from Foundry out/<Name>.sol/<Name>.json structure
 function loadArtifact(name: string): { abi: Abi; bytecode: { object: Hex } } {
@@ -69,22 +69,15 @@ const MSA_FACTORY_ABI = [
     }
 ] as const;
 
-async function bridgeIfNeeded(deployer: ReturnType<typeof privateKeyToAccount>) {
+async function assertFunded(deployer: ReturnType<typeof privateKeyToAccount>) {
     const l2 = createPublicClient({ transport: http(L2_RPC) });
     const balance = await l2.getBalance({ address: deployer.address });
-    if (balance >= BRIDGE_AMOUNT / 2n) {
-        console.log(`SSO deployer already funded: ${deployer.address}`);
-        return;
+    if (balance < MIN_L2_BALANCE) {
+        throw new Error(
+            `SSO deployer ${deployer.address} has ${formatEther(balance)} ETH; run bridge-funds before deployment`
+        );
     }
-
-    console.log(`Bridging ETH to SSO deployer: ${deployer.address}...`);
-    const l1 = createPublicClient({ chain: anvil, transport: http(L1_RPC) });
-    const l1Wallet = createWalletClient({ account: deployer, chain: anvil, transport: http(L1_RPC) });
-    const client = createViemClient({ l1, l2: l2 as never, l1Wallet });
-    const sdk = createViemSdk(client);
-    const handle = await sdk.deposits.create({ token: ETH_ADDRESS, amount: BRIDGE_AMOUNT, to: deployer.address });
-    await sdk.deposits.wait(handle, { for: 'l2' });
-    console.log('Bridge complete');
+    console.log(`SSO deployer funded with ${formatEther(balance)} ETH`);
 }
 
 async function deploy(
@@ -104,16 +97,23 @@ async function deploy(
     return receipt.contractAddress as Address;
 }
 
-async function hasCode(publicClient: ReturnType<typeof createPublicClient>, address: Address): Promise<boolean> {
+async function runtimeCodeHash(
+    publicClient: ReturnType<typeof createPublicClient>,
+    address: Address
+): Promise<Hex | undefined> {
     const code = await publicClient.getBytecode({ address });
-    return !!code && code !== '0x';
+    return code && code !== '0x' ? keccak256(code) : undefined;
 }
 
 function writeEnvFile(values: Record<string, string>) {
     const content = `${Object.entries(values)
         .map(([k, v]) => `${k}=${v}`)
         .join('\n')}\n`;
-    fs.writeFileSync(CONTRACTS_ENV_PATH, content);
+    fs.mkdirSync(path.dirname(CONTRACTS_ENV_PATH), { recursive: true });
+    const temporaryPath = `${CONTRACTS_ENV_PATH}.tmp`;
+    fs.writeFileSync(temporaryPath, content, { mode: 0o600 });
+    fs.renameSync(temporaryPath, CONTRACTS_ENV_PATH);
+    fs.chmodSync(CONTRACTS_ENV_PATH, 0o600);
     console.log(`\nWritten to ${CONTRACTS_ENV_PATH}`);
 }
 
@@ -134,11 +134,11 @@ async function main() {
     const deployer = privateKeyToAccount(SSO_DEPLOYER_PK);
     console.log(`SSO deployer address: ${deployer.address}`);
 
-    await bridgeIfNeeded(deployer);
+    await assertFunded(deployer);
 
     const chain = defineChain({
         id: CHAIN_ID,
-        name: 'Prividium Local',
+        name: CHAIN_NAME,
         nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
         rpcUrls: { default: { http: [L2_RPC] }, public: { http: [L2_RPC] } }
     });
@@ -157,11 +157,35 @@ async function main() {
         args: readonly unknown[] = []
     ): Promise<Address> {
         const configured = existing[key] as Address | undefined;
-        if (configured && (await hasCode(publicClient, configured))) {
-            console.log(`⏭  ${label} already at ${configured}`);
-            return configured;
+        if (configured) {
+            const actualCodeHash = await runtimeCodeHash(publicClient, configured);
+            if (actualCodeHash) {
+                const expectedCodeHash = existing[`${key}_CODE_HASH`] as Hex | undefined;
+                if (!expectedCodeHash) {
+                    throw new Error(
+                        `${label} exists at ${configured}, but ${key}_CODE_HASH is missing; refusing to trust unknown bytecode`
+                    );
+                }
+                if (actualCodeHash.toLowerCase() !== expectedCodeHash.toLowerCase()) {
+                    throw new Error(
+                        `${label} runtime bytecode mismatch at ${configured}: expected ${expectedCodeHash}, got ${actualCodeHash}`
+                    );
+                }
+                console.log(`⏭  ${label} already verified at ${configured}`);
+                return configured;
+            }
         }
-        return deploy(walletClient, publicClient, label, abi, bytecode as Hex, args);
+        const deployed = await deploy(walletClient, publicClient, label, abi, bytecode as Hex, args);
+        const deployedCodeHash = await runtimeCodeHash(publicClient, deployed);
+        if (!deployedCodeHash) {
+            throw new Error(`No runtime bytecode at ${deployed} immediately after deploying ${label}`);
+        }
+        existing[key] = deployed;
+        existing[`${key}_CODE_HASH`] = deployedCodeHash;
+        // Persist after every transaction so a retry can verify and resume after an
+        // interrupted deployment instead of creating a second contract set.
+        writeEnvFile(existing);
+        return deployed;
     }
 
     // Deployment order matches sso-deploy.ts (nonce 0–6)
@@ -212,7 +236,7 @@ async function main() {
     );
 
     // Verify EntryPoint is deployed at the expected address
-    if (!(await hasCode(publicClient, ENTRY_POINT_ADDRESS))) {
+    if (!(await runtimeCodeHash(publicClient, ENTRY_POINT_ADDRESS))) {
         throw new Error(`EntryPoint not found at ${ENTRY_POINT_ADDRESS} — ensure entrypoint-deployer ran first`);
     }
     console.log(`✅ EntryPoint at: ${ENTRY_POINT_ADDRESS}`);
@@ -236,16 +260,14 @@ async function main() {
         const code = await publicClient.getBytecode({ address: deployedAccount });
         if (!code || code === '0x') throw new Error(`No code at deployed SSO account: ${deployedAccount}`);
         ssoBytecodeHash = keccak256(code);
+        existing.DISPATCHER_SSO_BYTECODE_HASHES = ssoBytecodeHash;
+        writeEnvFile(existing);
         console.log(`✅ SSO account bytecode hash: ${ssoBytecodeHash}`);
     } else {
         console.log(`⏭  SSO bytecode hash already computed: ${ssoBytecodeHash}`);
     }
 
-    const envValues = {
-        // Consumed by prividium-api dispatcher
-        DISPATCHER_SSO_IMPLEMENTATIONS: accountImplementation,
-        DISPATCHER_SSO_BYTECODE_HASHES: ssoBytecodeHash,
-        // Consumed by sso-permissions-setup and auth-server-api (SSO_* names)
+    const deployedContracts = {
         SSO_WEBAUTHN_VALIDATOR: webauthnValidator,
         SSO_EOA_VALIDATOR: eoaValidator,
         SSO_SESSION_VALIDATOR: sessionValidator,
@@ -253,13 +275,34 @@ async function main() {
         SSO_ENTRY_POINT: ENTRY_POINT_ADDRESS,
         SSO_ACCOUNT_IMPLEMENTATION: accountImplementation,
         SSO_BEACON: beacon,
-        SSO_FACTORY: factory,
+        SSO_FACTORY: factory
+    };
+    const runtimeHashes = Object.fromEntries(
+        await Promise.all(
+            Object.entries(deployedContracts).map(async ([key, address]) => {
+                const hash = await runtimeCodeHash(publicClient, address);
+                if (!hash) throw new Error(`No runtime bytecode at ${address} while recording ${key}`);
+                return [`${key}_CODE_HASH`, hash];
+            })
+        )
+    );
+
+    const envValues = {
+        ...existing,
+        // Consumed by prividium-api dispatcher
+        DISPATCHER_SSO_IMPLEMENTATIONS: accountImplementation,
+        DISPATCHER_SSO_BYTECODE_HASHES: ssoBytecodeHash,
+        // Consumed by sso-permissions-setup and auth-server-api (SSO_* names)
+        ...deployedContracts,
+        // Used by this idempotent deployer to verify every existing address before skipping.
+        ...runtimeHashes,
         // Consumed by auth-server-api (canonical names expected by config.ts)
         FACTORY_ADDRESS: factory,
         EOA_VALIDATOR_ADDRESS: eoaValidator,
         WEBAUTHN_VALIDATOR_ADDRESS: webauthnValidator,
         SESSION_VALIDATOR_ADDRESS: sessionValidator,
-        GUARDIAN_EXECUTOR_ADDRESS: guardianExecutor
+        GUARDIAN_EXECUTOR_ADDRESS: guardianExecutor,
+        SSO_CLIENT_ID
     };
 
     writeEnvFile(envValues);

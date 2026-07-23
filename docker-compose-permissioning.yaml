@@ -1,0 +1,60 @@
+services:
+  watchdog-permissions-setup:
+    build:
+      context: ./dev/sso-setup
+      dockerfile: Dockerfile
+    image: local/prividium-sso-setup:v1.276.0-sandbox.1
+    environment:
+      DATABASE_URL: postgres://${PRIVIDIUM_DB_USER}:${PRIVIDIUM_DB_PASSWORD}@postgres:5432/${PRIVIDIUM_DB_NAME:-prividium_api}
+      WATCHDOG_PRIVATE_KEY: ${WATCHDOG_PRIVATE_KEY:?Set WATCHDOG_PRIVATE_KEY}
+    command: ["node", "--import", "tsx", "scripts/setup-watchdog-permissions.ts"]
+    depends_on:
+      prividium-api:
+        condition: service_healthy
+    networks:
+      - data
+    restart: "no"
+
+  webhook-permissions-setup:
+    profiles: [webhook]
+    build:
+      context: ./dev/sso-setup
+      dockerfile: Dockerfile
+    image: local/prividium-sso-setup:v1.276.0-sandbox.1
+    environment:
+      DATABASE_URL: postgres://${PRIVIDIUM_DB_USER}:${PRIVIDIUM_DB_PASSWORD}@postgres:5432/${PRIVIDIUM_DB_NAME:-prividium_api}
+      WEBHOOK_PRIVIDIUM_API_KEY: ${WEBHOOK_PRIVIDIUM_API_KEY:-}
+    command: ["node", "--import", "tsx", "scripts/setup-webhook-permissions.ts"]
+    depends_on:
+      prividium-api:
+        condition: service_healthy
+    networks:
+      - data
+    restart: "no"
+
+  sso-permissions-setup:
+    profiles: [sso]
+    build:
+      context: ./dev/sso-setup
+      dockerfile: Dockerfile
+    image: local/prividium-sso-setup:v1.276.0-sandbox.1
+    environment:
+      DATABASE_URL: postgres://${PRIVIDIUM_DB_USER}:${PRIVIDIUM_DB_PASSWORD}@postgres:5432/${PRIVIDIUM_DB_NAME:-prividium_api}
+      CONTRACTS_ENV_PATH: /runtime/contracts.env
+      CONTRACTS_DIR: /runtime/contracts
+      SSO_CLIENT_ID: sso-sandbox-client
+      SSO_APP_ID: sso-sandbox-app
+      SSO_REDIRECT_URI: https://auth.${SANDBOX_DOMAIN}/callback
+      SSO_ORIGIN: https://auth.${SANDBOX_DOMAIN}
+    command: ["node", "--import", "tsx", "scripts/setup-permissions.ts"]
+    volumes:
+      - sso_runtime:/runtime
+    depends_on:
+      sso-contracts-deployer:
+        condition: service_completed_successfully
+      prividium-api:
+        condition: service_healthy
+    networks:
+      - app
+      - data
+    restart: "no"

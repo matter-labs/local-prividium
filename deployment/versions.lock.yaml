@@ -1,0 +1,88 @@
+schema_version: 1
+generated_at: "2026-07-23"
+
+products:
+  protocol:
+    version: v0.31.0
+    source_commit: e091691063c99a1d0281d6fe42fb0ec4430f3673
+    milestone: active
+  zksync_os_server:
+    version: 0.20.8
+    source_commit: dbb5c03d4a94ceb1acea9f79242590f354660239
+    image: ghcr.io/matter-labs/zksync-os-server:v0.20.8@sha256:fde7bc9fd72dab21f4111b6a05cd8414c2095d531e75044ffac8384b15c32024
+    milestone: active
+  zk_deployer:
+    version: 16c6a83b4f634609958f347c56549ba19bf9df9b
+    source_commit: 16c6a83b4f634609958f347c56549ba19bf9df9b
+    local_patch:
+      path: dev/chain-bootstrap/zk-deployer-sepolia.patch
+      sha256: 57a62233cb4b56eb1baedb3f46e0389df5184c3655ad6603f953d1d60e77dbaa
+      purpose: Inject the SOPS governance signer and ETH asset ID, and retain broadcast transaction hashes.
+    build_image: local/zk-deployer:16c6a83-protocol-e091691
+    milestone: active
+  prividium:
+    version: v1.276.0
+    source_commit: fff5b1ad35812c749101960c72f45d70ead731a4
+    images:
+      permissions_api: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.276.0@sha256:d4c0bfe0d1716429cd7239916d4a05453350ecdc936929eeebb9f66e8c130723
+      user_panel: quay.io/matterlabs_enterprise/prividium-user-panel:v1.276.0@sha256:17310c2070ddc86fbef9181ceb1c9874c165965c0d07e23714bee046309cc401
+      admin_panel: quay.io/matterlabs_enterprise/prividium-adminv2:v1.276.0@sha256:2607a967b717af9bc21642514f929eea31c1e965570257f083cbca6314a42f41
+      bundler: quay.io/matterlabs_enterprise/prividium-bundler:v1.276.0@sha256:cacb276a24a709bf93155e2b53a78099d07f560e94edbada359aaae28aac1462
+    milestone: active
+  block_explorer:
+    version: v3.29.5
+    source_commit: 275594c8ece0c2749fb792bb6b8c08c9e7695e0c
+    images:
+      app: ghcr.io/matter-labs/block-explorer-app:v3.29.5@sha256:a366db942c61fe3c361881fd6c1596daf29a5d5e7c1631d18e07711b47ca12e6
+      api: ghcr.io/matter-labs/block-explorer-api:v3.29.5@sha256:97880d701fe79b68e1e3f4f758851e67c11bacc1d3cdbe4fed618771f4360cb4
+      worker: ghcr.io/matter-labs/block-explorer-worker:v3.29.5@sha256:1bdbdf3ded5a9902b01d624b8704fce5f977a74db34b86a557eaa18e99480efe
+      data_fetcher: ghcr.io/matter-labs/block-explorer-data-fetcher:v3.29.5@sha256:c3731530bc9544d3d80e68c0d8b59b6c78060498b9cdce455340a3ec882af209
+    milestone: active
+  watchdog:
+    version: v1.0.17
+    source_commit: 1edb60407b4b05eaba12f03337ef9f91e7388f27
+    build_image: local/prividium-watchdog:v1.0.17-1edb604
+    milestone: active
+  airbender:
+    version: v0.8.1
+    source_commit: 52e19931752bbd037a193cb837bd098822325431
+    milestone: deferred
+
+supporting_images:
+  caddy: caddy:2.11.4-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
+  postgres: postgres:18@sha256:3a82e1f56c8f0f5616a11103ac3d47e632c3938698946a7ad26da0df1334744a
+  keycloak: quay.io/keycloak/keycloak:26.0@sha256:09a381c715ab0b111835b70f2905955274843a219c6f27efb348e4d9f4086858
+  prometheus: prom/prometheus:v2.48.0@sha256:b440bc0e8aa5bab44a782952c09516b6a50f9d7b2325c1ffafac7bc833298e2e
+  grafana: grafana/grafana:10.2.0@sha256:1ee0c54286b8ca09a3dd1419ff8653e7780a148a006ac088544203bb0affe550
+  webhook: quay.io/matterlabs_enterprise/webhook-service:v0.1.28@sha256:8f87060a3513ca7a53c1182da98c13ba1637f8b77695cec71a0ae515a714f23c
+  sso_api: ghcr.io/matter-labs/sso-auth-server-api:996fbd7-1780065236920@sha256:3cca950a30fe121a98adce91bbc2f943e0169281b571e0c5902aee022a68cc42
+  sso_ui: ghcr.io/matter-labs/sso-auth-server:996fbd7-1780065232708@sha256:f2685b559c9a0a96e2663485d9e28221b46871e75e7d012c824c2d703e55e39f
+  institutional_demo_setup: quay.io/matterlabs_enterprise/intraday-demo-setup:single-chain@sha256:1301cedd18025988ecee634ca1a61bff5037627126b88d6ec4cc747408f4c19a
+  institutional_demo_app: quay.io/matterlabs_enterprise/prividium-demo-app:single-chain@sha256:4a7d0bb5fa7a3683e618c6f014df9e5e417d568ca667062542627a321174edb8
+
+build_images:
+  bridge_funds: local/prividium-bridge-funds:v1.276.0-sandbox.1
+  entrypoint_deployer: local/prividium-entrypoint-deployer:v1.276.0-sandbox.1
+  sso_setup: local/prividium-sso-setup:v1.276.0-sandbox.1
+  operator_balance_exporter: local/prividium-operator-balance-exporter:sandbox.1
+  watchdog: local/prividium-watchdog:v1.0.17-1edb604
+  zk_deployer: local/zk-deployer:16c6a83-protocol-e091691
+
+build_bases:
+  node_22_slim: node:22-slim@sha256:6c74791e557ce11fc957704f6d4fe134a7bc8d6f5ca4403205b2966bd488f6b3
+  node_24_alpine: node:24.18.0-alpine@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd
+  foundry: ghcr.io/foundry-rs/foundry:v1.5.1@sha256:3a70bfa9bd2c732a767bb60d12c8770b40e8f9b6cca28efc4b12b1be81c7f28e
+  rust_bookworm: rust:bookworm@sha256:77fac8b98f9f46062bb680b6d25d5bcaabfc400143952ebc572e924bcbedc3fa
+  debian_bookworm_slim: debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818
+
+optional_profiles:
+  sso:
+    compose_file: docker-compose-optional.yaml
+    services: [sso-funds, entrypoint-deployer, bundler, sso-runtime-init, contracts-extractor, sso-contracts-deployer, sso-permissions-setup, auth-server-api, auth-server]
+  webhook:
+    compose_file: docker-compose-optional.yaml
+    services: [webhook-permissions-setup, zksync-webhook-service]
+  institutional_demo:
+    compose_file: docker-compose-demos.yaml
+    compose_profile: institutional-demo
+    requires: [sso]

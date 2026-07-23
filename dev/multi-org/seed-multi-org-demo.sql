@@ -1,9 +1,7 @@
 -- Multi-org demo fixture: the single source of truth for the demo org's rows, applied only when
 -- MULTI_ORG_ENABLED is on. Both seed paths run THIS file — native `pnpm dev` (the permissions-api
 -- seed-runner) and the dockerized stack (dev/sso-setup/scripts/setup-multi-org-demo.ts) — each
--- substituting `__KEYCLOAK_URL__` for the environment's Keycloak base (host port for native,
--- in-network for docker). Backs the `?org=acme` login flow: open http://localhost:3001/?org=acme and
--- sign in as admin@acme.local / password (the first login bootstraps the org admin).
+-- substituting the public issuer and in-network JWKS base for this deployment.
 
 INSERT INTO organizations (id, name, brand_name, logo_url, primary_color)
 VALUES ('acme', 'Acme Corp', 'Acme Corp', '/prividium_logo.svg', '#e8590c')
@@ -21,8 +19,8 @@ ON CONFLICT (id) DO UPDATE SET
 INSERT INTO oidc_providers (organization_id, issuer, jwks_uri, audience, client_id, display_name)
 VALUES (
     'acme',
-    'http://localhost:5080/realms/acme',
-    '__KEYCLOAK_URL__/realms/acme/protocol/openid-connect/certs',
+    '__KEYCLOAK_ISSUER_BASE_URL__/realms/acme',
+    '__KEYCLOAK_JWKS_BASE_URL__/realms/acme/protocol/openid-connect/certs',
     'acme-client',
     'acme-client',
     -- Composes the same "Sign in with Keycloak" button label as the zone env default, via the org path.

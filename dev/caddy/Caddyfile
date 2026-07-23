@@ -1,0 +1,84 @@
+{
+	email {$ACME_EMAIL}
+	admin off
+}
+
+(sandbox_proxy) {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), geolocation=(), microphone=()"
+		-Server
+	}
+}
+
+app.{$SANDBOX_DOMAIN} {
+	import sandbox_proxy
+	reverse_proxy user-panel:3000
+}
+
+admin.{$SANDBOX_DOMAIN} {
+	import sandbox_proxy
+	reverse_proxy admin-panel:3000
+}
+
+api.{$SANDBOX_DOMAIN} {
+	import sandbox_proxy
+	request_body {
+		max_size 20MB
+	}
+	reverse_proxy prividium-api:8000 {
+		transport http {
+			read_timeout 5m
+			write_timeout 5m
+		}
+	}
+}
+
+explorer.{$SANDBOX_DOMAIN} {
+	import sandbox_proxy
+	reverse_proxy block-explorer-app:3010
+}
+
+explorer-api.{$SANDBOX_DOMAIN} {
+	import sandbox_proxy
+	reverse_proxy block-explorer-api:3000
+}
+
+auth.{$SANDBOX_DOMAIN} {
+	import sandbox_proxy
+	# SSO is optional; defer issuance until this fixed hostname is requested.
+	tls {
+		on_demand
+	}
+	reverse_proxy auth-server:3000
+}
+
+auth-api.{$SANDBOX_DOMAIN} {
+	import sandbox_proxy
+	# SSO is optional; defer issuance until this fixed hostname is requested.
+	tls {
+		on_demand
+	}
+	reverse_proxy auth-server-api:3004
+}
+
+idp.{$SANDBOX_DOMAIN} {
+	import sandbox_proxy
+	@private_admin path /admin* /realms/master*
+	respond @private_admin 404
+	reverse_proxy keycloak:8080
+}
+
+demo.{$SANDBOX_DOMAIN} {
+	import sandbox_proxy
+	# Defer this certificate until the optional demo hostname is actually used.
+	# The hostname is fixed, so on-demand issuance cannot be used for arbitrary names.
+	tls {
+		on_demand
+	}
+	reverse_proxy institutional-demo:3500
+}

@@ -1,191 +1,172 @@
-# Local Prividium™ Development Environment
+# Prividium Sepolia Sandbox
 
-A Docker Compose setup for running a complete Prividium™ cluster locally.
+This repository deploys a durable, single-VPS Prividium sandbox backed by a dedicated ZKsync ecosystem on Ethereum Sepolia.
 
 > [!CAUTION]
-> This repository is for local development only.
-> The stack uses localhost-only URLs, seeded test users, test wallets, fixed development keys, and local infrastructure such as Anvil and a local zkSync OS instance.
-> Do not reuse these Docker Compose files, credentials, keys, or defaults against any shared or public network.
+> This is not a production deployment or an officially supported public testnet. It uses fake proofs, a testnet verifier, one VPS, and operator-funded Sepolia transactions. Do not use it to secure assets of value.
 
-## Getting Started
+## What runs
 
-> [!WARNING]
-> Request access to our private docker registry before continuing with these instructions.
+- ZKsync OS `0.20.8` using Protocol `v0.31.0`, rollup DA, blobs, and 10-minute batches.
+- Prividium API, user panel, admin panel, and Block Explorer.
+- Keycloak backed by PostgreSQL with one initial sandbox administrator.
+- Caddy with automatic HTTPS for all browser-facing services.
+- Prometheus, Grafana, Watchdog, and an operator-balance exporter.
+- Optional SSO/EntryPoint/bundler, webhook, and institutional-demo profiles.
 
-### 1. Authenticate with Docker Registry
+Anvil, deterministic development wallets, fixed passwords, the local faucet, and raw public RPC ports are not included.
 
-Authenticate with the information provided by the MatterLabs team:
+## Prerequisites
 
-```bash
-DOCKER_USERNAME=matterlabs_enterprise+your_username
-DOCKER_PASSWORD=super_secret_provided_by_matterlabs
+- An x86-64 VPS with Docker Engine and Docker Compose v2.
+- Recommended capacity: 8 vCPU, 16 GB RAM, and 200 GB SSD.
+- An IPv4 address reachable on ports 80 and 443.
+- `A` records pointing to the VPS for the core stack:
 
-docker login -u=$DOCKER_USERNAME -p=$DOCKER_PASSWORD quay.io
-```
+  `app`, `admin`, `api`, `explorer`, `explorer-api`, and `idp` under the selected sandbox domain.
 
-### 2. Start the Cluster
+- Optional `auth` and `auth-api` records for the `sso` profile, and `demo` for the institutional profile.
 
-Start dependencies and core services:
+- A private Sepolia RPC with historical calls, logs, receipts, and blob transaction support.
+- A separate public, CORS-enabled Sepolia RPC for browser bridging.
+- `age`, `sops`, `cast`, `jq`, `openssl`, and `curl` on the operator workstation.
+- Access to the Matter Labs private images on Quay.
 
-```bash
-docker compose -f docker-compose.yaml up -d
-```
+## Deployment
 
-### 3. Seed Wallet-Based Users w/ Funds
+The repository exposes one operator command: `tools/sandbox`. A first
+deployment normally takes **2–4 hours elapsed time**, excluding delays obtaining
+Sepolia ETH, private-image access, a capable RPC, and DNS/ACME propagation.
+Start with the [guided setup](docs/SETUP.md); it describes the purpose,
+expected result, time, and recovery path for every stage.
 
-To add a few wallet-based authenticated users with pre-configured test wallets, run the seed script against the
-database:
-
-```bash
-docker exec -i zksync-prividium-postgres-1 psql -U postgres -d prividium_api < dev/wallet-auth/seed-wallet-auth.sql
-```
-
-### 4. Access the Application
-
-Open the User Panel at **http://localhost:3001**
-
-Click **"Sign in with Keycloak"** and use one of the pre-configured test users:
-
-| Email           | Password |
-|-----------------|----------|
-| admin@local.dev | password |
-| user1@local.dev | password |
-| user2@local.dev | password |
-
-Alternatively, you can login via a MetaMask wallet by clicking **"Sign in with Wallet"**:
-
-| Wallet Address                           | Private Key                                                        |
-|------------------------------------------|--------------------------------------------------------------------|
-| f39Fd6e51aad88F6F4ce6aB8827279cffFb92266 | 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 |
-| 70997970C51812dc3A010C7d01b50e0d17dc79C8 | 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d |
-| 3C44CdDdB6a900fa2b585dd299e03d12FA4293BC | 0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a |
-
-These wallet-based test users all have wallet addresses derived from the standard test mnemonic:
-
-```
-test test test test test test test test test test test junk
-```
-
-### 5. Access Other Applications
-
-Login to the Admin Panel at **http://localhost:3000**
-
-Login to the Block Explorer at **http://localhost:3010** (Be sure a wallet is associated with the user's account)
-
----
-
-## Example Demo Apps
-
-Optional demo apps can be started alongside the core stack using Docker Compose profiles:
-
-| Profile              | Port | Description                                   | Instructions                               |
-| -------------------- | ---- | --------------------------------------------- | ------------------------------------------ |
-| `institutional-demo` | 3500 | Intraday Repo lending demo with ERC-20 tokens | [Demo guide](./institutional-demo/DEMO.md) |
+The complete command sequence is:
 
 ```bash
-# Intraday Repo Demo
-docker compose --profile institutional-demo up -d
+tools/sandbox doctor
+tools/sandbox init
+
+sudo install -d -m 0700 -o "$USER" /etc/prividium/runtime
+tools/sandbox decrypt
+tools/sandbox funding
+tools/sandbox funding apply
+tools/sandbox prepare
+tools/sandbox readiness
+tools/sandbox broadcast
+tools/sandbox deploy
 ```
 
----
+Initialization writes a commit-safe role inventory grouped by purpose. The
+customer sends exactly **1 Sepolia ETH to one address**: the sandbox funding
+wallet shown in `deployment/public/roles.md`. `funding` writes a protected,
+reviewable allocation plan; `funding apply` confirms that exact plan and
+distributes only current shortfalls.
 
-## Architecture
+`broadcast` reruns the mandatory readiness gate and is the only step that
+submits the ecosystem deployment to Sepolia. `deploy` waits for core service
+health plus HTTPS, protected API, Explorer, and OIDC checks before writing the
+commit-safe final summary.
 
-### Core Services (`docker-compose.yaml`)
+The broadcast writes `deployment/public/manifest.json`. Review and commit this
+non-secret record after checking its addresses and transaction hashes.
 
-The main Prividium™ application services:
+## Repository layout
 
-- **Admin Panel** - Administrative interface for managing Prividium™
-- **User Panel** - User login for Prividium™
-- **Prividium API** - API services, including control and permissions and protected rpc.
+`docker-compose.yaml` is the only Compose entrypoint. It includes smaller files
+that can be reviewed independently:
 
-### Dependencies (`docker-compose-deps.yaml`)
+| File | Responsibility |
+| --- | --- |
+| `docker-compose.yaml` | Core Prividium API, user/admin applications, and Caddy |
+| `docker-compose-platform.yaml` | PostgreSQL, Keycloak, chain bootstrap, and ZKsync OS |
+| `docker-compose-explorer.yaml` | Block Explorer UI, API, worker, and data fetcher |
+| `docker-compose-permissioning.yaml` | Idempotent Watchdog, SSO, and webhook permissions |
+| `docker-compose-monitoring.yaml` | Watchdog, Prometheus, Grafana, and balance monitoring |
+| `docker-compose-optional.yaml` | SSO/bundler and webhook runtime |
+| `docker-compose-demos.yaml` | Institutional demo identity, funding, deployment, seed, and app |
 
-Supporting infrastructure services:
+See [deployment components](docs/COMPONENTS.md) for profiles, networks,
+persistence, and startup dependencies.
 
-- **PostgreSQL** - Database for prividium api and block explorer
-- **Keycloak** - Identity provider for OIDC authentication
-- **zkSync OS** - Layer 2 sequencer
-- **L1 (Anvil)** - Local Ethereum execution layer used as the settlement layer for this sandbox
-- **Block Explorer** - Transaction explorer
-- **Prometheus** - Metrics collection
-- **Grafana** - Metrics visualization
+## Public endpoints
 
----
+For `SANDBOX_DOMAIN=sandbox.example.com`:
 
-## Available URLs
+| Component | URL |
+| --- | --- |
+| User panel | `https://app.sandbox.example.com` |
+| Admin panel | `https://admin.sandbox.example.com` |
+| Protected API/RPC | `https://api.sandbox.example.com` |
+| Block Explorer | `https://explorer.sandbox.example.com` |
+| Explorer API | `https://explorer-api.sandbox.example.com` |
+| SSO (optional) | `https://auth.sandbox.example.com` |
+| SSO API (optional) | `https://auth-api.sandbox.example.com` |
+| OIDC issuer | `https://idp.sandbox.example.com/realms/prividium` |
+| Institutional demo (optional) | `https://demo.sandbox.example.com` |
 
-### Application
+Keycloak administration, PostgreSQL, Prometheus, bundler, webhook internals, and raw ZKsync OS RPC are not public. Grafana is bound to `127.0.0.1:3100` and is intended for an SSH tunnel.
 
-| Service        | URL                   |
-|----------------|-----------------------|
-| User Panel     | http://localhost:3001 |
-| Admin Panel    | http://localhost:3000 |
-| Block Explorer | http://localhost:3010 |
+## Configuration and versions
 
-### APIs
+- `deployment/sandbox.env.example` documents every public and secret setting.
+- `deployment/versions.lock.yaml` records component versions, source commits, and immutable registry digests.
+- `deployment/funding-policy.json` records the one-ETH allocation boundary and release benchmark.
+- `deployment/public/manifest.example.json` documents the on-chain manifest written by the bootstrap.
+- `deployment/public/roles.example.md` and `deployment/public/deployment-summary.example.md` document the public reports.
+- `tools/validate-stack` rejects local-only endpoints, legacy chain IDs, known development keys, floating remote images, and unexpected host ports.
 
-| Service            | URL                   |
-|--------------------|-----------------------|
-| Prividium API      | http://localhost:8000 |
-| Block Explorer API | http://localhost:3002 |
+Airbender `v0.8.1` remains selected but deferred; no prover service is started.
 
-### Blockchain
+## Optional SSO, bundler, and webhooks
 
-| Service        | URL                   |
-|----------------|-----------------------|
-| zkSync OS RPC  | http://localhost:5050 |
-| L1 (Anvil) RPC | http://localhost:5010 |
+The default deployment does not start SSO, EntryPoint deployment, the bundler, or webhooks. Their credentials are still generated independently and kept encrypted so either profile can be enabled later.
 
-### Infrastructure
-
-| Service        | URL                   | Credentials         |
-|----------------|-----------------------|---------------------|
-| Keycloak Admin | http://localhost:5080 | admin / admin       |
-| Grafana        | http://localhost:3100 | admin / admin       |
-| Prometheus     | http://localhost:9090 | -                   |
-| PostgreSQL     | localhost:5432        | postgres / postgres |
-
-### Metrics
-
-| Service               | URL                   |
-|-----------------------|-----------------------|
-| Prividium API Metrics | http://localhost:9091 |
-
----
-
-## Requesting Additional Funds
-
-As everything is running locally, there are rich accounts on the L2.
-
-You can use the following to "add assets" directly to any other account for testing:
+For SSO, first add `auth` and `auth-api` DNS records, then:
 
 ```bash
-cast send -r http://localhost:5050 <address-to-fund>  --value 1000000000000000000 --private-key 0x7726827caac94a7f9e1b160f7ea819f172f7b6f9d2a97f992c38edeab82d4110
+tools/sandbox edit-secrets
+# Set BUNDLER_ENABLED=true, save, and exit the editor.
+tools/sandbox decrypt
+tools/sandbox enable sso
 ```
 
----
+The command states that SSO/bundler funding is outside the core 1 ETH
+guarantee and checks the sandbox funding wallet for the incremental allowance
+before it starts anything.
 
-## Viewing Available Versions
-
-To see which image versions are available (useful for updating `docker-compose.yaml`):
+For webhooks:
 
 ```bash
-# Install skopeo if needed, then login
-skopeo login --username $DOCKER_USERNAME --password $DOCKER_PASSWORD quay.io
-
-# List available tags for a service
-skopeo list-tags docker://quay.io/matterlabs_enterprise/prividium-user-panel
+tools/sandbox edit-secrets
+# Set WEBHOOK_ENABLED=true, save, and exit the editor.
+tools/sandbox decrypt
+tools/sandbox enable webhook
 ```
 
----
+The SSO and webhook permission jobs are independent and idempotent. Disabling either profile does not remove its durable data.
 
-## Stopping the Cluster
+## Optional institutional demo
+
+The demo uses SSO. Add the `demo` DNS record and enable it after the core stack
+and SSO configuration are healthy:
 
 ```bash
-# Stop services
-docker compose -f docker-compose.yaml down
-
-# To remove all data volumes as well
-docker compose -f docker-compose.yaml down -v
+tools/sandbox enable demo
 ```
+
+The profile creates its own Keycloak realm, two SOPS-managed users, a dedicated funded deployer, and persistent contract output. It does not add demo users to the core realm.
+Its incremental funding is also outside the core 1 ETH guarantee and is checked
+before the profile starts.
+
+## Release benchmark gate
+
+The one-ETH claim is a release contract, not an estimate. Funding, readiness,
+and deployment refuse to proceed while
+`deployment/funding-policy.json` has `benchmark.status: pending`. Before
+customer release, complete one clean Sepolia rehearsal using
+[the benchmark procedure](docs/FUNDING_BENCHMARK.md), record the evidence, and
+independently review the resulting targets. Provisional values are never
+presented as measured values.
+
+For restarts, upgrades, backups, certificate troubleshooting, and secret
+recovery, use the [operations runbook](docs/RUNBOOK.md).

@@ -1,0 +1,34 @@
+groups:
+  - name: prividium-sandbox
+    rules:
+      - alert: PrividiumWatchdogFlowFailed
+        expr: watchdog_status == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Watchdog flow {{ $labels.flow }} has failed for five minutes"
+
+      - alert: PrividiumWatchdogMissing
+        expr: absent(up{job="watchdog"} == 1)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Watchdog metrics are unavailable"
+
+      - alert: PrividiumOperatorLowSepoliaBalance
+        expr: prividium_operator_l1_balance_eth < 0.01
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Operator {{ $labels.role }} has less than 0.01 Sepolia ETH"
+
+      - alert: PrividiumApiUnavailable
+        expr: up{job="prividium-api"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prividium API metrics have been unavailable for five minutes"

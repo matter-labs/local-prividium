@@ -2,6 +2,7 @@
     "name": "@repo/contracts",
     "version": "0.0.0",
     "private": true,
+    "packageManager": "pnpm@11.17.0",
     "scripts": {
         "install-deps": "cd entrypoint && forge soldeer install --config-location foundry",
         "bridge-funds": "tsx scripts/bridge-funds.ts",
