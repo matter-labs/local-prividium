@@ -6,7 +6,7 @@ include:
 
 services:
   admin-panel:
-    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.276.4
+    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.277.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -17,6 +17,7 @@ services:
       - VITE_TENANTS_ENABLED=false
       - VITE_TRANSACTION_STATUS_API_ENABLED=true
       - VITE_BRAND_NAME=Prividium™
+      - VITE_TOKEN_DEPLOYMENT_ENABLED=true
       - PORT=3000
     depends_on:
       - prividium-api
@@ -25,7 +26,7 @@ services:
       - '3000:3000'
 
   prividium-api:
-    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.276.4
+    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.277.0
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -213,7 +214,7 @@ services:
         condition: service_started
 
   user-panel:
-    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.276.4
+    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.277.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
