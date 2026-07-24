@@ -71,6 +71,7 @@ not yet have public activation commands.
 - A dedicated Ubuntu Server 24.04 LTS / amd64 VPS with Docker Engine and
   Docker Compose v2.
 - Minimum CPU capacity: 4 vCPU.
+- Minimum memory capacity: 8 GB RAM.
 - Recommended capacity: 8 vCPU, 16 GB RAM, and 200 GB SSD.
 - Customer-approved SSH access, inbound TCP 80 and 443, and inbound UDP 443.
 - `A` records for `app`, `admin`, `api`, `explorer`, `explorer-api`, and `idp`

@@ -18,8 +18,9 @@ host_preflight_supported_architectures:
   - amd64
 host_preflight_minimum_vcpus: 4
 host_preflight_recommended_vcpus: 8
-# Allows for memory reserved by the hypervisor/kernel on a nominal 16 GiB VPS.
-host_preflight_minimum_memory_mb: 15360
+# Allow for memory reserved by the hypervisor/kernel on nominal VPS sizes.
+host_preflight_minimum_memory_mb: 7680
+host_preflight_recommended_memory_mb: 15360
 # Cloud disk plans are commonly advertised using decimal GB.
 host_preflight_minimum_root_disk_bytes: 200000000000
 host_preflight_reserved_ports:

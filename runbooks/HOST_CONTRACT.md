@@ -28,7 +28,8 @@ The initial automated path will support exactly:
 - one VPS with a public IPv4 address;
 - a key-authenticated SSH account with working `sudo`;
 - at least 4 vCPU, with 8 vCPU recommended;
-- 16 GB RAM and 200 GB of SSD storage or better;
+- at least 8 GB RAM, with 16 GB recommended;
+- 200 GB of SSD storage or better;
 - a provider recovery console or equivalent out-of-band access;
 - a conventional systemd installation;
 - Docker Engine with Docker Compose v2.

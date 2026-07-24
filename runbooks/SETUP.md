@@ -9,8 +9,8 @@ network, custody model, or supported public testnet.
 ## Before starting
 
 Use a dedicated Ubuntu Server 24.04 LTS / amd64 VPS with Docker Engine,
-Docker Compose v2, at least 4 vCPU, and recommended capacity of 8 vCPU, 16 GB
-RAM, and 200 GB SSD. The
+Docker Compose v2, at least 4 vCPU and 8 GB RAM, and recommended capacity of
+8 vCPU, 16 GB RAM, and 200 GB SSD. The
 [evaluation VPS host contract](HOST_CONTRACT.md) defines the supported host,
 network, access, and credential boundary.
 

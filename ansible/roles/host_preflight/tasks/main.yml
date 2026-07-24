@@ -381,6 +381,16 @@
   when:
     - ansible_facts.processor_vcpus | int < host_preflight_recommended_vcpus
 
+- name: Report memory recommendation
+  ansible.builtin.debug:
+    msg: >-
+      Memory compatibility passed with {{ ansible_facts.memtotal_mb }} MiB.
+      Approximately 16 GiB remains recommended for preparation, initial
+      synchronization, Explorer indexing, and startup headroom, but is not
+      required for an evaluation deployment.
+  when:
+    - ansible_facts.memtotal_mb | int < host_preflight_recommended_memory_mb
+
 - name: Report installable baseline gaps
   ansible.builtin.debug:
     msg: >-
