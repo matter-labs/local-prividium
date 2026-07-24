@@ -2,8 +2,10 @@
 set -Eeuo pipefail
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+compose_file="${repo_root}/compose/compose.yaml"
 environment_file="${SANDBOX_ENV_FILE:-/etc/prividium/runtime/sandbox.env}"
 mode="${1:-prepare}"
+image_tag="local/zk-deployer:16c6a83-protocol-e091691"
 
 if [[ ! -s "$environment_file" ]]; then
   echo "Runtime environment not found: ${environment_file}" >&2
@@ -14,15 +16,22 @@ if [[ "$mode" != "prepare" && "$mode" != "broadcast" ]]; then
   exit 1
 fi
 
-caller_confirmation="${CONFIRM_BROADCAST:-}"
+caller_confirmation="${CONFIRM_BROADCAST-}"
+caller_confirmation_supplied="${CONFIRM_BROADCAST+x}"
+unset CONFIRM_BROADCAST
 set -a
 source "$environment_file"
 set +a
-if [[ -n "$caller_confirmation" ]]; then
+unset PRIVIDIUM_CHAIN_BOOTSTRAP_IMAGE
+if [[ "$caller_confirmation_supplied" == "x" ]]; then
   CONFIRM_BROADCAST="$caller_confirmation"
   export CONFIRM_BROADCAST
+else
+  unset CONFIRM_BROADCAST
 fi
 export CHAIN_BOOTSTRAP_MODE="$mode"
+export PRIVIDIUM_HOST_UID="${PRIVIDIUM_HOST_UID:-$(id -u)}"
+export PRIVIDIUM_HOST_GID="${PRIVIDIUM_HOST_GID:-$(id -g)}"
 if [[ "$mode" == "broadcast" ]]; then
   expected="BROADCAST_SEPOLIA_${L2_CHAIN_ID}"
   if [[ "${CONFIRM_BROADCAST:-}" != "$expected" ]]; then
@@ -31,11 +40,77 @@ if [[ "$mode" == "broadcast" ]]; then
   fi
 fi
 
+sensitive_output_values=()
+for sensitive_name in \
+  SEPOLIA_RPC_URL \
+  L1_DEPLOYER_PRIVATE_KEY \
+  ECOSYSTEM_GOVERNOR_PRIVATE_KEY \
+  CHAIN_OWNER_PRIVATE_KEY \
+  FEE_ACCOUNT_PRIVATE_KEY \
+  OPERATOR_COMMIT_PRIVATE_KEY \
+  OPERATOR_PROVE_PRIVATE_KEY \
+  OPERATOR_EXECUTE_PRIVATE_KEY; do
+  sensitive_value="${!sensitive_name:-}"
+  if [[ -n "$sensitive_value" ]]; then
+    sensitive_output_values+=("$sensitive_value")
+    if [[ "$sensitive_value" =~ ^0x[0-9a-fA-F]{64}$ ]]; then
+      sensitive_output_values+=("${sensitive_value#0x}")
+    fi
+  fi
+done
+
+sanitize_chain_bootstrap_output() {
+  local line=""
+  local sensitive_value
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    for sensitive_value in "${sensitive_output_values[@]}"; do
+      line="${line//$sensitive_value/[hidden]}"
+    done
+    printf "%s\n" "$line"
+  done
+}
+
 cd "$repo_root"
-printf "\nBuilding locked zk-deployer and Protocol v31 contracts...\n"
-docker compose --env-file "$environment_file" --profile chain-bootstrap build chain-bootstrap
+if [[ "$mode" == "prepare" ]]; then
+  printf "\nBuilding locked zk-deployer and Protocol v31 contracts...\n"
+  docker compose -f "$compose_file" \
+    --env-file "$environment_file" \
+    --profile chain-bootstrap \
+    build chain-bootstrap
+  prepared_image_id=$(
+    docker image inspect "$image_tag" --format '{{.Id}}'
+  )
+else
+  preparation_record="${RUNTIME_DIR}/chain/out/preparation.json"
+  if [[ ! -s "$preparation_record" ]] ||
+     ! prepared_image_id=$(
+       jq -er \
+         '.chain_bootstrap_image_id |
+          select(type == "string" and test("^sha256:[0-9a-f]{64}$"))' \
+         "$preparation_record"
+     ); then
+    echo "Prepared chain-bootstrap image identity is missing; run ./cli/prividium prepare" >&2
+    exit 1
+  fi
+  if ! docker image inspect "$prepared_image_id" >/dev/null 2>&1; then
+    echo "The exact chain-bootstrap image used during preparation is missing." >&2
+    echo "Run ./cli/prividium prepare to create a new simulation before broadcast." >&2
+    exit 1
+  fi
+  printf "\nReusing the chain-bootstrap image built during preparation.\n"
+fi
+if [[ ! "$prepared_image_id" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+  echo "Docker returned an invalid chain-bootstrap image identity" >&2
+  exit 1
+fi
+export PRIVIDIUM_CHAIN_BOOTSTRAP_IMAGE="$prepared_image_id"
 printf "\nRunning chain bootstrap mode: %s\n\n" "$mode"
-docker compose --env-file "$environment_file" --profile chain-bootstrap run --rm \
+docker compose -f "$compose_file" \
+  --env-file "$environment_file" --profile chain-bootstrap run \
+  --rm --no-build --pull never \
   -e "BOOTSTRAP_MODE=${mode}" \
   -e "CONFIRM_BROADCAST=${CONFIRM_BROADCAST:-}" \
-  chain-bootstrap
+  -e "PREPARED_IMAGE_ID=${prepared_image_id}" \
+  chain-bootstrap 2>&1 |
+  sanitize_chain_bootstrap_output

@@ -124,6 +124,46 @@
                 "admin",
                 "user"
             ]
+        },
+        {
+            "id": "00000000-0000-0000-0000-000000000002",
+            "username": "${SANDBOX_USER_1_EMAIL}",
+            "email": "${SANDBOX_USER_1_EMAIL}",
+            "emailVerified": true,
+            "enabled": true,
+            "firstName": "Sandbox",
+            "lastName": "User One",
+            "requiredActions": [],
+            "credentials": [
+                {
+                    "type": "password",
+                    "value": "${SANDBOX_USER_1_PASSWORD}",
+                    "temporary": false
+                }
+            ],
+            "realmRoles": [
+                "user"
+            ]
+        },
+        {
+            "id": "00000000-0000-0000-0000-000000000003",
+            "username": "${SANDBOX_USER_2_EMAIL}",
+            "email": "${SANDBOX_USER_2_EMAIL}",
+            "emailVerified": true,
+            "enabled": true,
+            "firstName": "Sandbox",
+            "lastName": "User Two",
+            "requiredActions": [],
+            "credentials": [
+                {
+                    "type": "password",
+                    "value": "${SANDBOX_USER_2_PASSWORD}",
+                    "temporary": false
+                }
+            ],
+            "realmRoles": [
+                "user"
+            ]
         }
     ]
 }

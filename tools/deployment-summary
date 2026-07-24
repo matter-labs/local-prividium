@@ -3,6 +3,7 @@ set -Eeuo pipefail
 umask 077
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+compose_file="${repo_root}/compose/compose.yaml"
 environment_file="${SANDBOX_ENV_FILE:-/etc/prividium/runtime/sandbox.env}"
 public_manifest="${PUBLIC_MANIFEST_PATH:-${repo_root}/deployment/public/manifest.json}"
 public_summary="${DEPLOYMENT_SUMMARY_PATH:-${repo_root}/deployment/public/deployment-summary.md}"
@@ -73,10 +74,10 @@ fi
 long_running_services=(
   zksyncos postgres keycloak prividium-api user-panel admin-panel caddy
   block-explorer-api block-explorer-app block-explorer-worker
-  block-explorer-data-fetcher watchdog prometheus grafana
+  block-explorer-data-fetcher prometheus grafana
   operator-balance-exporter
 )
-completed_services=(chain-preflight bridge-funds watchdog-permissions-setup)
+completed_services=(chain-preflight)
 
 check_compose_services() {
   local service
@@ -89,7 +90,9 @@ check_compose_services() {
   local detail=()
 
   for service in "${long_running_services[@]}"; do
-    container_id=$(docker compose --env-file "$environment_file" ps --all -q "$service" 2>/dev/null | head -n 1)
+    container_id=$(docker compose -f "$compose_file" \
+      --env-file "$environment_file" ps --all -q "$service" 2>/dev/null |
+      head -n 1)
     if [[ -z "$container_id" ]]; then
       all_ready=false
       detail+=("${service}=missing")
@@ -106,7 +109,9 @@ check_compose_services() {
     fi
   done
   for service in "${completed_services[@]}"; do
-    container_id=$(docker compose --env-file "$environment_file" ps --all -q "$service" 2>/dev/null | head -n 1)
+    container_id=$(docker compose -f "$compose_file" \
+      --env-file "$environment_file" ps --all -q "$service" 2>/dev/null |
+      head -n 1)
     if [[ -z "$container_id" ]]; then
       all_ready=false
       detail+=("${service}=missing")
@@ -142,7 +147,7 @@ if (( ${#failed_checks[@]} == 0 )); then
       sleep "$poll_seconds"
     done
     if [[ "$compose_ready" == "true" ]]; then
-      pass_check "Core Compose services are running or completed successfully"
+      pass_check "The 14 core Compose services are running and chain-preflight completed successfully"
     fi
   fi
 else
@@ -264,7 +269,7 @@ if (( ${#failed_checks[@]} )); then
     echo
     write_checks
     echo
-    echo "Resolve the failed checks, inspect \`tools/sandbox status\` and \`tools/sandbox logs\`, then rerun \`tools/sandbox summary\`."
+    echo "Resolve the failed checks, inspect \`docker compose -f compose/compose.yaml --env-file ${environment_file} ps --all\` and \`docker compose -f compose/compose.yaml --env-file ${environment_file} logs\`, then rerun \`./cli/prividium deploy\`."
     echo
     echo "This diagnostic contains no private keys, passwords, or provider URLs."
   } >"$report_tmp"
@@ -285,7 +290,8 @@ service_is_running() {
   local profile="$1"
   local service="$2"
   [[ -n "$(
-    docker compose --env-file "$environment_file" --profile "$profile" \
+    docker compose -f "$compose_file" \
+      --env-file "$environment_file" --profile "$profile" \
       ps -q "$service" 2>/dev/null || true
   )" ]]
 }
@@ -336,7 +342,6 @@ fi
   echo "| zk-deployer | $(locked_product_value zk_deployer version) | \`$(locked_product_value zk_deployer source_commit)\` |"
   echo "| Prividium | $(locked_product_value prividium version) | \`$(locked_product_value prividium source_commit)\` |"
   echo "| Block Explorer | $(locked_product_value block_explorer version) | \`$(locked_product_value block_explorer source_commit)\` |"
-  echo "| Watchdog | $(locked_product_value watchdog version) | \`$(locked_product_value watchdog source_commit)\` |"
   echo "| Airbender | $(locked_product_value airbender version) — deferred, not running | \`$(locked_product_value airbender source_commit)\` |"
   echo
   echo "## Enabled capabilities"

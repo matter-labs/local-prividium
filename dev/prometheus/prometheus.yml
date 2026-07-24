@@ -16,12 +16,6 @@ scrape_configs:
         labels:
           service: prividium-api
 
-  - job_name: watchdog
-    static_configs:
-      - targets: ["watchdog:8090"]
-        labels:
-          service: watchdog
-
   - job_name: operator-balances
     static_configs:
       - targets: ["operator-balance-exporter:9102"]

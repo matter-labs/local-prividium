@@ -1,0 +1,456 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+export LC_ALL=C
+
+repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+compose_file="${repo_root}/compose/compose.yaml"
+encrypted_file="${SANDBOX_SECRETS_FILE:-${repo_root}/deployment/secrets/sandbox.enc.env}"
+runtime_environment="${SANDBOX_ENV_FILE:-/etc/prividium/runtime/sandbox.env}"
+targets_file="${FUNDING_TARGETS_FILE:-${repo_root}/deployment/funding-targets.json}"
+public_manifest="${PUBLIC_MANIFEST_PATH:-${repo_root}/deployment/public/manifest.json}"
+role_report="${ROLE_REPORT_PATH:-${repo_root}/deployment/public/roles.md}"
+versions_lock="${repo_root}/deployment/versions.lock.yaml"
+
+decrypted_tmp=""
+chainlist_tmp=""
+funding_tmp=""
+cleanup() {
+  [[ -z "$decrypted_tmp" ]] || rm -f -- "$decrypted_tmp"
+  [[ -z "$chainlist_tmp" ]] || rm -f -- "$chainlist_tmp"
+  [[ -z "$funding_tmp" ]] || rm -f -- "$funding_tmp"
+}
+trap cleanup EXIT
+
+blocking_items=()
+warning_items=()
+
+pass_check() {
+  printf "✓ %s\n" "$1"
+}
+
+block_check() {
+  printf "✗ %s\n" "$1"
+  blocking_items+=("$2")
+}
+
+warn_check() {
+  printf "! %s\n" "$1"
+  warning_items+=("$2")
+}
+
+print_numbered_items() {
+  local index=1
+  local item
+  for item in "$@"; do
+    printf "%d. %s\n" "$index" "$item"
+    index=$((index + 1))
+  done
+}
+
+file_mode() {
+  if stat -f '%Lp' "$1" >/dev/null 2>&1; then
+    stat -f '%Lp' "$1"
+  else
+    stat -c '%a' "$1"
+  fi
+}
+
+sha256_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+dns_resolves() {
+  local hostname="$1"
+  if command -v getent >/dev/null 2>&1 &&
+     RES_OPTIONS="attempts:1 timeout:2" \
+       getent ahosts "$hostname" >/dev/null 2>&1; then
+    return 0
+  fi
+  if command -v dscacheutil >/dev/null 2>&1 &&
+     dscacheutil -q host -a name "$hostname" |
+       grep -q ip_address; then
+    return 0
+  fi
+  if command -v host >/dev/null 2>&1 &&
+     host -W 3 "$hostname" >/dev/null 2>&1; then
+    return 0
+  fi
+  return 1
+}
+
+printf "Focused pre-broadcast readiness\n"
+printf "Profile: sandbox\n\n"
+
+missing_commands=()
+for required_command in sops docker cast jq curl openssl; do
+  if ! command -v "$required_command" >/dev/null 2>&1; then
+    missing_commands+=("$required_command")
+  fi
+done
+if (( ${#missing_commands[@]} )); then
+  block_check \
+    "Required host tools are missing: ${missing_commands[*]}" \
+    "Install the missing host tools: ${missing_commands[*]}."
+fi
+
+configuration_ready="true"
+if [[ -L "$encrypted_file" || ! -f "$encrypted_file" || ! -s "$encrypted_file" ]]; then
+  block_check \
+    "Encrypted sandbox configuration is missing or unsafe" \
+    "Restore the regular SOPS-encrypted configuration created by ./cli/prividium init."
+  configuration_ready="false"
+elif (( (8#$(file_mode "$encrypted_file") & 0022) != 0 )); then
+  block_check \
+    "Encrypted sandbox configuration is group/world writable" \
+    "Restrict the encrypted sandbox configuration before continuing."
+  configuration_ready="false"
+else
+  pass_check "Encrypted sandbox configuration is protected"
+fi
+
+runtime_dir=$(dirname "$runtime_environment")
+if [[ -L "$runtime_dir" || ! -d "$runtime_dir" ]]; then
+  block_check \
+    "Protected runtime directory is missing or unsafe" \
+    "Run ./cli/prividium prepare after creating /etc/prividium/runtime with mode 0700."
+  configuration_ready="false"
+elif [[ ! -O "$runtime_dir" ||
+        ! -r "$runtime_dir" ||
+        ! -w "$runtime_dir" ||
+        ! -x "$runtime_dir" ]]; then
+  block_check \
+    "Protected runtime directory is not owned and writable by the current user" \
+    'Run: sudo install -d -m 0700 -o "$USER" /etc/prividium/runtime'
+  configuration_ready="false"
+elif [[ "$(file_mode "$runtime_dir")" != "700" ]]; then
+  block_check \
+    "Protected runtime directory does not have mode 0700" \
+    'Run: sudo install -d -m 0700 -o "$USER" /etc/prividium/runtime'
+  configuration_ready="false"
+else
+  pass_check "Protected runtime directory is user-owned, writable, and mode 0700"
+fi
+
+if [[ -L "$runtime_environment" ||
+      ! -f "$runtime_environment" ||
+      ! -s "$runtime_environment" ||
+      ! -r "$runtime_environment" ||
+      ! -O "$runtime_environment" ]]; then
+  block_check \
+    "Protected runtime environment is missing or unsafe" \
+    "Rerun ./cli/prividium prepare to recreate the protected runtime."
+  configuration_ready="false"
+elif [[ "$(file_mode "$runtime_environment")" != "600" ]]; then
+  block_check \
+    "Protected runtime environment does not have mode 0600" \
+    "Rerun ./cli/prividium prepare to recreate the protected runtime."
+  configuration_ready="false"
+else
+  pass_check "Protected runtime environment has mode 0600"
+fi
+
+if [[ "$configuration_ready" == "true" &&
+      ${#missing_commands[@]} -eq 0 ]]; then
+  decrypted_tmp=$(mktemp)
+  chmod 0600 "$decrypted_tmp"
+  if sops --decrypt --input-type dotenv --output-type dotenv \
+    "$encrypted_file" >"$decrypted_tmp" 2>/dev/null &&
+     cmp -s "$decrypted_tmp" "$runtime_environment"; then
+    pass_check "Protected runtime matches the encrypted configuration"
+  else
+    block_check \
+      "Protected runtime is stale or differs from the encrypted configuration" \
+      "Rerun ./cli/prividium prepare before broadcasting."
+    configuration_ready="false"
+  fi
+fi
+
+if [[ "$configuration_ready" == "true" ]]; then
+  set -a
+  # Generated by tools/init-secrets and restricted to shell-safe dotenv values.
+  source "$runtime_environment"
+  set +a
+  unset PRIVIDIUM_CHAIN_BOOTSTRAP_IMAGE
+fi
+
+runtime_values_ready="true"
+for required_variable in \
+  SANDBOX_DOMAIN L2_CHAIN_ID RUNTIME_DIR SEPOLIA_RPC_URL \
+  L1_DEPLOYER_PRIVATE_KEY ECOSYSTEM_GOVERNOR_PRIVATE_KEY \
+  CHAIN_OWNER_PRIVATE_KEY OPERATOR_COMMIT_PRIVATE_KEY \
+  OPERATOR_PROVE_PRIVATE_KEY OPERATOR_EXECUTE_PRIVATE_KEY; do
+  if [[ "$configuration_ready" != "true" ||
+        -z "${!required_variable:-}" ]]; then
+    runtime_values_ready="false"
+  fi
+done
+if [[ "$configuration_ready" == "true" &&
+      "${RUNTIME_DIR:-}" != "/etc/prividium/runtime" ]]; then
+  runtime_values_ready="false"
+fi
+if [[ "$runtime_values_ready" != "true" ]]; then
+  block_check \
+    "Protected runtime is missing required sandbox values" \
+    "Rerun ./cli/prividium prepare from a fresh initialized configuration."
+fi
+
+identity_ready="false"
+if [[ "$runtime_values_ready" == "true" &&
+      ${#missing_commands[@]} -eq 0 ]]; then
+  source "${repo_root}/tools/lib/sandbox-roles.sh"
+  if sandbox_load_role_addresses >/dev/null 2>&1 &&
+     sandbox_validate_distinct_roles >/dev/null 2>&1; then
+    identity_ready="true"
+    pass_check "Generated sandbox identities are valid and distinct"
+  else
+    block_check \
+      "Generated sandbox identities are invalid or reused" \
+      "Start again from a fresh ./cli/prividium init identity set."
+  fi
+fi
+
+if [[ "$identity_ready" == "true" && -s "$role_report" ]]; then
+  expected_fingerprint=$(sandbox_role_fingerprint)
+  report_fingerprint=$(
+    sed -n 's/.*Role-set fingerprint: `\([^`]*\)`.*/\1/p' \
+      "$role_report" |
+      head -n 1
+  )
+  if [[ "$expected_fingerprint" == "$report_fingerprint" ]]; then
+    pass_check "Public role inventory matches the protected identity set"
+  else
+    block_check \
+      "Public role inventory does not match the protected identity set" \
+      "Restore deployment/public/roles.md from the initialized identity set."
+  fi
+else
+  block_check \
+    "Public role inventory is missing" \
+    "Restore deployment/public/roles.md from the initialized identity set."
+fi
+
+prepared_manifest="/etc/prividium/runtime/chain/out/manifest.json"
+prepared_state="/etc/prividium/runtime/chain/state.json"
+preparation_record="/etc/prividium/runtime/chain/out/preparation.json"
+expected_protocol_commit="e091691063c99a1d0281d6fe42fb0ec4430f3673"
+expected_deployer_commit="16c6a83b4f634609958f347c56549ba19bf9df9b"
+if [[ "$runtime_values_ready" == "true" &&
+      -s "$prepared_manifest" &&
+      -r "$prepared_manifest" &&
+      -s "$prepared_state" &&
+      -r "$prepared_state" &&
+      -s "$preparation_record" &&
+      -r "$preparation_record" ]]; then
+  prepared_manifest_sha=$(sha256_file "$prepared_manifest")
+  prepared_state_sha=$(sha256_file "$prepared_state")
+  if jq -e \
+    --argjson chain_id "$L2_CHAIN_ID" \
+    --arg protocol "$expected_protocol_commit" \
+    --arg deployer "$expected_deployer_commit" \
+    --arg state_sha "$prepared_state_sha" \
+    --arg manifest_sha "$prepared_manifest_sha" \
+    '
+      .schema_version == 1 and
+      .l1_chain_id == 11155111 and
+      .l2_chain_id == $chain_id and
+      (.generated_at |
+        type == "string" and
+        test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")) and
+      .sources.protocol == $protocol and
+      .sources.zk_deployer == $deployer and
+      .chain_state_sha256 == $state_sha and
+      (.chain_bootstrap_image_id |
+        type == "string" and
+        test("^sha256:[0-9a-f]{64}$")) and
+      .prepared_manifest_sha256 == $manifest_sha
+    ' "$preparation_record" >/dev/null; then
+    pass_check "Prepared protocol artifacts match the chain and locked sources"
+  else
+    block_check \
+      "Prepared protocol provenance is invalid or stale" \
+      "Rerun ./cli/prividium prepare and review the new artifacts."
+  fi
+else
+  block_check \
+    "Prepared protocol artifacts are missing" \
+    "Run ./cli/prividium prepare before broadcasting."
+fi
+
+if grep -Fq "$expected_protocol_commit" "$versions_lock" &&
+   grep -Fq "$expected_deployer_commit" "$versions_lock"; then
+  pass_check "Protocol and deployer source locks match preparation"
+else
+  block_check \
+    "Protocol or deployer source lock changed after preparation" \
+    "Restore the approved release locks and rerun ./cli/prividium prepare."
+fi
+
+if [[ -e "$public_manifest" || -L "$public_manifest" ]]; then
+  block_check \
+    "A public protocol manifest already exists" \
+    "Do not broadcast again; use ./cli/prividium deploy for this sandbox."
+else
+  pass_check "No conflicting public protocol manifest exists"
+fi
+
+if [[ "$runtime_values_ready" == "true" &&
+      "$identity_ready" == "true" ]]; then
+  funding_tmp=$(mktemp)
+  chmod 0600 "$funding_tmp"
+  if FUNDING_TARGETS_FILE="$targets_file" \
+    PUBLIC_MANIFEST_PATH="$public_manifest" \
+    ETH_RPC_TIMEOUT=15 \
+    "${repo_root}/tools/funding-reconcile" \
+      --from-environment --check all >"$funding_tmp" 2>&1; then
+    pass_check "All six protocol identities remain funded"
+    pass_check "Sandbox funding wallet has no pending transaction"
+  else
+    block_check \
+      "Protocol funding is incomplete or changing" \
+      "Run ./cli/prividium fund, wait for pending transactions, then rerun ./cli/prividium prepare."
+  fi
+fi
+
+rpc_ready="false"
+if [[ "$runtime_values_ready" == "true" &&
+      ${#missing_commands[@]} -eq 0 ]]; then
+  if actual_l1_chain_id=$(
+    ETH_RPC_URL="$SEPOLIA_RPC_URL" \
+      ETH_RPC_TIMEOUT=15 \
+      cast chain-id 2>/dev/null
+  ) && [[ "$actual_l1_chain_id" == "11155111" ]]; then
+    rpc_ready="true"
+    pass_check "Private RPC is Ethereum Sepolia (URL hidden)"
+  else
+    block_check \
+      "Private RPC is unavailable or is not Ethereum Sepolia" \
+      "Restore the configured private Sepolia RPC."
+  fi
+fi
+
+if [[ "$rpc_ready" == "true" ]]; then
+  source "${repo_root}/dev/chain-bootstrap/rpc-capabilities.sh"
+  if ETH_RPC_TIMEOUT=15 \
+    probe_sepolia_rpc_capabilities "$SEPOLIA_RPC_URL" >/dev/null 2>&1; then
+    pass_check "Private RPC supports required deployment capabilities"
+  else
+    block_check \
+      "Private RPC does not provide required deployment capabilities" \
+      "Use a Sepolia RPC with history, logs, receipts, and blob fee data."
+  fi
+fi
+
+if [[ "$runtime_values_ready" == "true" &&
+      "${L2_CHAIN_ID:-}" =~ ^[0-9]+$ ]] &&
+   (( L2_CHAIN_ID >= 1073741824 && L2_CHAIN_ID <= 2147483647 )); then
+  chainlist_tmp=$(mktemp)
+  chmod 0600 "$chainlist_tmp"
+  if curl --fail --silent --show-error --location --max-time 20 \
+    https://chainid.network/chains.json --output "$chainlist_tmp" 2>/dev/null; then
+    if jq -e --argjson id "$L2_CHAIN_ID" \
+      'any(.[]; .chainId == $id)' "$chainlist_tmp" >/dev/null 2>&1; then
+      block_check \
+        "L2 chain ID ${L2_CHAIN_ID} is already listed in Chainlist" \
+        "Do not broadcast this identity set."
+    else
+      pass_check "L2 chain ID ${L2_CHAIN_ID} is not listed in Chainlist"
+    fi
+  else
+    block_check \
+      "Chainlist is unavailable for the collision check" \
+      "Restore access to chainid.network and rerun readiness."
+  fi
+fi
+
+docker_ready="false"
+if command -v docker >/dev/null 2>&1 &&
+   docker compose version >/dev/null 2>&1 &&
+   DOCKER_CLIENT_TIMEOUT=15 docker info >/dev/null 2>&1; then
+  docker_ready="true"
+  pass_check "Docker daemon and Docker Compose v2 are available"
+else
+  block_check \
+    "Docker daemon or Docker Compose v2 is unavailable" \
+    "Start Docker and grant the deployment user access."
+fi
+
+if [[ "$docker_ready" == "true" &&
+      "$runtime_values_ready" == "true" ]]; then
+  prepared_image_id=$(
+    jq -r '.chain_bootstrap_image_id // empty' "$preparation_record" 2>/dev/null ||
+      true
+  )
+  if [[ "$prepared_image_id" =~ ^sha256:[0-9a-f]{64}$ ]] &&
+     docker image inspect "$prepared_image_id" >/dev/null 2>&1; then
+    pass_check "Exact chain-bootstrap image used for simulation is available"
+  else
+    block_check \
+      "Exact chain-bootstrap image used for simulation is unavailable" \
+      "Rerun ./cli/prividium prepare before broadcasting."
+  fi
+
+  if "${repo_root}/tools/validate-stack" "$runtime_environment" \
+    >/dev/null 2>&1; then
+    pass_check "Complete Compose model passes static validation"
+  else
+    block_check \
+      "Complete Compose model failed static validation" \
+      "Restore the focused Compose model and rerun ./cli/prividium prepare."
+  fi
+
+  missing_images=()
+  while IFS= read -r image; do
+    [[ -n "$image" ]] || continue
+    if ! docker image inspect "$image" >/dev/null 2>&1; then
+      missing_images+=("$image")
+    fi
+  done < <(
+    cd "$repo_root"
+    docker compose -f "$compose_file" \
+      --env-file "$runtime_environment" config --images |
+      sort -u
+  )
+  if (( ${#missing_images[@]} )); then
+    block_check \
+      "One or more prepared default images are missing locally" \
+      "Rerun ./cli/prividium prepare to pull and build the default stack."
+  else
+    pass_check "All default deployment images are present locally"
+  fi
+fi
+
+if [[ "$runtime_values_ready" == "true" ]]; then
+  unresolved=()
+  for label in app admin api explorer explorer-api idp; do
+    hostname="${label}.${SANDBOX_DOMAIN}"
+    if ! dns_resolves "$hostname"; then
+      unresolved+=("$hostname")
+    fi
+  done
+  if (( ${#unresolved[@]} )); then
+    warn_check \
+      "${#unresolved[@]}/6 public hostnames do not resolve yet" \
+      "Configure DNS before running ./cli/prividium deploy: ${unresolved[*]}."
+  else
+    pass_check "All six public sandbox hostnames resolve"
+  fi
+fi
+
+printf "\n"
+if (( ${#blocking_items[@]} )); then
+  printf "READINESS BLOCKED\n\n"
+  print_numbered_items "${blocking_items[@]}"
+  exit 1
+fi
+
+if (( ${#warning_items[@]} )); then
+  printf "READINESS PASSED WITH WARNINGS\n\n"
+  print_numbered_items "${warning_items[@]}"
+else
+  printf "READINESS PASSED\n"
+fi

@@ -1,0 +1,194 @@
+name: prividium-sandbox
+
+# This is the only Compose entrypoint operators should invoke. The included
+# files group services by responsibility so each subsystem can be reviewed
+# without navigating one monolithic deployment file.
+include:
+  - platform.yaml
+  - permissioning.yaml
+  - explorer.yaml
+  - monitoring.yaml
+  - optional.yaml
+  - demos.yaml
+
+services:
+  caddy:
+    image: caddy:2.11.4-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
+    restart: unless-stopped
+    environment:
+      SANDBOX_DOMAIN: ${SANDBOX_DOMAIN:?Set SANDBOX_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ../dev/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - edge
+      - app
+    healthcheck:
+      test: ["CMD", "caddy", "validate", "--config", "/etc/caddy/Caddyfile"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  admin-panel:
+    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.276.0@sha256:2607a967b717af9bc21642514f929eea31c1e965570257f083cbca6314a42f41
+    platform: linux/amd64
+    restart: unless-stopped
+    environment:
+      VITE_PRIVIDIUM_API_URL: https://api.${SANDBOX_DOMAIN:?Set SANDBOX_DOMAIN}
+      VITE_DISCLOSURE_METHODS_ENABLED: "false"
+      VITE_FAUCET_ENABLED: "false"
+      VITE_WEBHOOKS_ENABLED: ${WEBHOOK_ENABLED:-false}
+      VITE_TENANTS_ENABLED: "false"
+      VITE_TRANSACTION_STATUS_API_ENABLED: "true"
+      VITE_BRAND_NAME: ${CHAIN_NAME:-Prividium Sandbox}
+      PORT: "3000"
+    depends_on:
+      prividium-api:
+        condition: service_healthy
+    networks:
+      - app
+
+  prividium-api:
+    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.276.0@sha256:d4c0bfe0d1716429cd7239916d4a05453350ecdc936929eeebb9f66e8c130723
+    platform: linux/amd64
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "-ec"]
+    command: |
+      if [ -s /runtime/contracts.env ]; then
+        set -a
+        . /runtime/contracts.env
+        set +a
+      fi
+      exec docker-entrypoint.sh node dist/index.js
+    volumes:
+      - sso_runtime:/runtime:ro
+    environment:
+      PORT: "8000"
+      METRICS_PORT: "9091"
+      SEQUENCER_RPC_URL: http://zksyncos:3050
+      CORS_ORIGIN: https://app.${SANDBOX_DOMAIN},https://admin.${SANDBOX_DOMAIN},https://explorer.${SANDBOX_DOMAIN},https://explorer-api.${SANDBOX_DOMAIN},https://auth.${SANDBOX_DOMAIN},https://auth-api.${SANDBOX_DOMAIN},https://demo.${SANDBOX_DOMAIN}
+      DATABASE_URL: postgres://${PRIVIDIUM_DB_USER:?Set PRIVIDIUM_DB_USER}:${PRIVIDIUM_DB_PASSWORD:?Set PRIVIDIUM_DB_PASSWORD}@postgres:5432/${PRIVIDIUM_DB_NAME:-prividium_api}
+      AUTH_METHODS: oidc,crypto_native
+      NODE_ENV: production
+      SIWE_CHAIN_ID: ${L2_CHAIN_ID:?Set L2_CHAIN_ID}
+      SIWE_VALID_DOMAINS: app.${SANDBOX_DOMAIN},admin.${SANDBOX_DOMAIN},auth.${SANDBOX_DOMAIN},demo.${SANDBOX_DOMAIN}
+      SIWE_HMAC_SECRET: ${SIWE_HMAC_SECRET:?Set SIWE_HMAC_SECRET}
+      SIWE_CHALLENGE_RATE_LIMIT_COUNT: "25"
+      SIWE_CHALLENGE_RATE_LIMIT_WINDOW_SECONDS: "300"
+      SIWE_CONSUMED_NONCE_TTL_SECONDS: "600"
+      SIWE_CLEANUP_INTERVAL_SECONDS: "60"
+      SIWE_CHALLENGE_RATE_LIMIT_BYPASS_IPS: ""
+      DEPLOYMENT_PENDING_TTL_SECONDS: "3600"
+      DEPLOYMENT_ERRORED_RETENTION_SECONDS: "604800"
+      DEPLOYMENT_CLEANUP_INTERVAL_SECONDS: "300"
+      OIDC_JWKS_URI: http://keycloak:8080/realms/prividium/protocol/openid-connect/certs
+      OIDC_JWT_AUD: prividium-client
+      OIDC_JWT_ISSUER: https://idp.${SANDBOX_DOMAIN}/realms/prividium
+      OIDC_ADMIN_SUBS: 00000000-0000-0000-0000-000000000001
+      CORS_CACHE_DURATION_MS: "60000"
+      ADMIN_PANEL_REDIRECT_URLS: https://admin.${SANDBOX_DOMAIN}/callback
+      BLOCK_EXPLORER_REDIRECT_URLS: https://explorer.${SANDBOX_DOMAIN}/auth/callback
+      SWAGGER_DOCS_REDIRECT_URLS: ${SWAGGER_DOCS_REDIRECT_URLS:-}
+      SWAGGER_UI_ALLOWED_ROLES: admin
+      WALLETS_API_ENABLED: "true"
+      TENANTS_ENABLED: "false"
+      DISCLOSURE_METHODS_ENABLED: "false"
+      BRAND_NAME: ${CHAIN_NAME:-Prividium Sandbox}
+      MULTI_ORG_ENABLED: "true"
+      ORG_ROUTING_BY_DOMAIN: "false"
+      TRANSACTION_STATUS_API_ENABLED: "true"
+      TRANSACTION_STATUS_RETENTION_SECONDS: "1209600"
+      TRANSACTION_STATUS_SWEEP_INTERVAL_SECONDS: "3600"
+      TRANSACTION_STATUS_MAX_ROWS: "1000000"
+      MAX_ORGANIZATIONS: "100"
+      MAX_WALLETS_PER_USER: "100"
+      WEBAUTHN_RP_NAME: ZKsync Prividium Sandbox
+      WEBAUTHN_RP_ID: ${SANDBOX_DOMAIN}
+      WEBAUTHN_ORIGIN: https://app.${SANDBOX_DOMAIN},https://admin.${SANDBOX_DOMAIN},https://auth.${SANDBOX_DOMAIN}
+      USER_PANEL_URL: https://app.${SANDBOX_DOMAIN}
+      WEBAUTHN_REQUIRE_USER_VERIFICATION: "true"
+      WEBAUTHN_AUTHENTICATOR_ATTACHMENT: platform
+      EXTRA_PUBLIC_CODE_ADDRESSES: ${EXTRA_PUBLIC_CODE_ADDRESSES:-}
+      BUNDLER_ENABLED: ${BUNDLER_ENABLED:-false}
+      BUNDLER_RPC_URL: http://bundler:4337
+      WEBHOOK_API_URL: http://zksync-webhook-service:8081
+      FAUCET_ENABLED: "false"
+      RATE_LIMIT_ENABLED: "true"
+      RATE_LIMIT_AUTH_MAX: "100"
+      RATE_LIMIT_PUBLIC_MAX: "300"
+      RATE_LIMIT_USER_MAX: "300"
+      RATE_LIMIT_RPC_MAX: "1000"
+      RATE_LIMIT_M2M_MAX: "1000"
+      RATE_LIMIT_WINDOW_MS: "60000"
+      CRYPTO_NATIVE_ADMIN_WALLETS: ${AUTH_SERVER_ADMIN_ADDRESS:?Set AUTH_SERVER_ADMIN_ADDRESS}
+      PRIVIDIUM_API_URL: https://api.${SANDBOX_DOMAIN}
+      CHAIN_NAME: ${CHAIN_NAME:-Prividium Sandbox}
+      NATIVE_TOKEN_NAME: Ether
+      NATIVE_TOKEN_SYMBOL: ETH
+      NATIVE_TOKEN_DECIMALS: "18"
+      BLOCK_EXPLORER_URL: https://explorer.${SANDBOX_DOMAIN}
+      L1_CHAIN_ID: "11155111"
+      L1_CHAIN_NAME: Ethereum Sepolia
+      KNOWN_DEV_WALLETS_ALLOWLIST: ""
+    depends_on:
+      postgres:
+        condition: service_healthy
+      zksyncos:
+        condition: service_healthy
+    networks:
+      - app
+      - data
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://127.0.0.1:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  user-panel:
+    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.276.0@sha256:17310c2070ddc86fbef9181ceb1c9874c165965c0d07e23714bee046309cc401
+    platform: linux/amd64
+    restart: unless-stopped
+    environment:
+      VITE_OIDC_AUTHORITY: https://idp.${SANDBOX_DOMAIN}/realms/prividium
+      VITE_OIDC_CLIENT_ID: prividium-client
+      VITE_OIDC_BUTTON_TEXT: Sign in with Keycloak
+      VITE_ADMIN_PANEL_REDIRECT_URI: https://admin.${SANDBOX_DOMAIN}/callback
+      VITE_AUTH_METHODS: oidc,crypto_native
+      VITE_BRAND_NAME: ${CHAIN_NAME:-Prividium Sandbox}
+      VITE_WALLETS_ENABLED: "true"
+      VITE_FAUCET_ENABLED: "false"
+      VITE_BRIDGING_ENABLED: "true"
+      VITE_WITHDRAWAL_ENABLED: "true"
+      VITE_L1_RPC_URL: ${SEPOLIA_BROWSER_RPC_URL:?Set a public CORS-enabled SEPOLIA_BROWSER_RPC_URL}
+      VITE_PRIVIDIUM_API_URL: https://api.${SANDBOX_DOMAIN}
+      VITE_ADMIN_PANEL_URL: https://admin.${SANDBOX_DOMAIN}
+      VITE_REOWN_PROJECT_ID: ${REOWN_PROJECT_ID:-}
+      PORT: "3000"
+    depends_on:
+      prividium-api:
+        condition: service_healthy
+    networks:
+      - app
+
+volumes:
+  caddy_data:
+  caddy_config:
+  postgres_data:
+  keycloak_data:
+  zksyncos_db:
+  prometheus_data:
+  grafana_data:
+  sso_runtime:
+
+networks:
+  edge:
+  app:
+  data:
+    internal: true

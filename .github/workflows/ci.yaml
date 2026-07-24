@@ -13,11 +13,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install pinned Ansible validation tools
+        run: python -m pip install --requirement ansible/requirements.txt
+
       - name: Check shell scripts
         shell: bash
         run: |
-          find tools dev -type f \( -name '*.sh' -o -path 'tools/*' \) -print0 |
+          find cli tools dev -type f \
+            \( -name '*.sh' -o -path 'tools/*' -o -path 'cli/prividium' \) \
+            -print0 |
             xargs -0 bash -n
 
+      - name: Validate read-only host preflight
+        working-directory: ansible
+        run: |
+          ansible-playbook \
+            --inventory inventory/example.ini \
+            --syntax-check \
+            playbooks/preflight.yml
+          ansible-lint
+
       - name: Render and validate every Compose profile
-        run: tools/validate-stack --allow-unbenchmarked deployment/sandbox.env.example
+        run: tools/validate-stack deployment/sandbox.env.example

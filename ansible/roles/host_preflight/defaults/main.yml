@@ -1,0 +1,61 @@
+---
+# Public, non-secret host intent.
+prividium_operator_user: ""
+prividium_operator_public_key: ""
+prividium_ssh_port: 22
+prividium_ssh_allowed_cidrs: []
+prividium_unrestricted_ssh_acknowledged: false
+prividium_ipv6_policy: configured
+prividium_provider_recovery_confirmed: false
+prividium_enable_http3: true
+prividium_runtime_dir: /etc/prividium/runtime
+
+# Supported evaluation-host contract.
+host_preflight_supported_distribution: Ubuntu
+host_preflight_supported_release: "24.04"
+host_preflight_supported_architectures:
+  - x86_64
+  - amd64
+host_preflight_minimum_vcpus: 4
+host_preflight_recommended_vcpus: 8
+# Allows for memory reserved by the hypervisor/kernel on a nominal 16 GiB VPS.
+host_preflight_minimum_memory_mb: 15360
+# Cloud disk plans are commonly advertised using decimal GB.
+host_preflight_minimum_root_disk_bytes: 200000000000
+host_preflight_reserved_ports:
+  - 80
+  - 443
+  - 3100
+host_preflight_conflicting_services:
+  - k3s.service
+  - kubelet.service
+  - rke2-agent.service
+  - rke2-server.service
+  - snap.microk8s.daemon-kubelite.service
+host_preflight_time_services:
+  - chrony.service
+  - chronyd.service
+  - systemd-timesyncd.service
+host_preflight_expected_packages:
+  - ca-certificates
+  - curl
+  - git
+  - jq
+  - openssl
+  - unattended-upgrades
+host_preflight_outbound_endpoints:
+  - name: Docker Ubuntu repository
+    url: https://download.docker.com/linux/ubuntu/dists/noble/Release
+    status_codes:
+      - 200
+  - name: Quay registry
+    url: https://quay.io/v2/
+    status_codes:
+      - 200
+      - 401
+
+# Reserved for a future idempotent install playbook. The public preflight keeps
+# these false so a previously used application host is rejected.
+host_preflight_allow_existing_runtime: false
+host_preflight_allow_existing_containers: false
+host_preflight_allow_reserved_listeners: false

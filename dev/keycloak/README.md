@@ -1,6 +1,6 @@
 # Keycloak sandbox configuration
 
-The core realm import contains one administrator with a stable subject. Its email and temporary password are substituted from the SOPS runtime environment during the first import.
+The core realm import contains three evaluation users with stable subjects. The administrator receives the `admin` and `user` roles and must change its temporary password at first sign-in. The other two users receive only the `user` role and permanent evaluation passwords. Their credentials are substituted from the SOPS runtime environment during the first import.
 
 Keycloak runs with PostgreSQL persistence, strict HTTPS hostname handling, and forwarded proxy headers. Caddy exposes OIDC realm endpoints but blocks `/admin*` and `/realms/master*` publicly.
 

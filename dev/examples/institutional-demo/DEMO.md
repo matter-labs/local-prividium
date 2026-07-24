@@ -10,10 +10,7 @@ Before enabling it:
 4. Confirm the encrypted environment contains two demo credentials and a distinct `INSTITUTIONAL_DEMO_DEPLOYER_PRIVATE_KEY`.
 5. Ensure the bridge sponsor has enough Sepolia ETH.
 
-Start the profile:
-
-```bash
-tools/sandbox enable demo
-```
-
-The identity, funding, deployment, organization seed, and application stages are idempotent. Access the app at `https://demo.${SANDBOX_DOMAIN}` and the organization login at `https://app.${SANDBOX_DOMAIN}/?org=acme`.
+The implementation is retained for a future public profile command, but the
+focused sandbox CLI does not activate it yet. Its identity, funding, deployment,
+organization seed, and application stages remain idempotent for that future
+workflow.

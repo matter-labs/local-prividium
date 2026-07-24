@@ -25,11 +25,14 @@ source "${repo_root}/tools/lib/sandbox-roles.sh"
 
 : "${SANDBOX_DOMAIN:?SANDBOX_DOMAIN is missing from the encrypted environment}"
 : "${L2_CHAIN_ID:?L2_CHAIN_ID is missing from the encrypted environment}"
-command -v cast >/dev/null || {
-  echo "cast is required to derive public role addresses" >&2
-  exit 1
-}
+for required_command in cast openssl; do
+  command -v "$required_command" >/dev/null || {
+    echo "${required_command} is required to derive public role addresses" >&2
+    exit 1
+  }
+done
 
+sandbox_load_role_addresses
 sandbox_validate_distinct_roles
 fingerprint=$(sandbox_role_fingerprint)
 temporary=$(mktemp)
@@ -81,7 +84,7 @@ done
 
 {
   echo
-  echo "The core funding policy gives these operators a 14-day evaluation runway."
+  echo "These operators receive their required Sepolia ETH from the sandbox funding wallet before protocol broadcast."
   echo
   echo "## 3. Sandbox funding"
   echo
@@ -92,20 +95,20 @@ write_role_row bridge_sponsor
 
 {
   echo
-  echo "> Customer action: send exactly **1 Sepolia ETH** to the sandbox funding wallet. Do not fund the other role addresses manually."
+  echo "> Customer action: run **\`./cli/prividium fund\`** and send only the requested Sepolia ETH to this wallet. Do not fund the other role addresses manually."
   echo
   echo "## 4. Service and passive accounts"
   echo
   echo "| Role | Address | Scope | Purpose |"
   echo "| --- | --- | --- | --- |"
 } >>"$temporary"
-for role in fee_account watchdog bundler entrypoint_deployer sso_deployer auth_server auth_server_admin institutional_demo_deployer; do
+for role in fee_account bundler entrypoint_deployer sso_deployer auth_server auth_server_admin institutional_demo_deployer; do
   write_role_row "$role"
 done
 
 {
   echo
-  echo "Optional identities remain dormant until their Compose profile is enabled and are not covered by the core 1 ETH funding guarantee."
+  echo "Optional identities remain dormant until their Compose profile is enabled and are not funded by the default sandbox workflow."
   echo
   echo "## Security boundary"
   echo
@@ -114,4 +117,4 @@ done
 
 mkdir -p "$(dirname "$output")"
 install -m 0644 "$temporary" "$output"
-echo "Public role inventory written to ${output}"
+echo "✓ Generated public role inventory"

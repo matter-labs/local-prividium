@@ -2,80 +2,101 @@
 set -Eeuo pipefail
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-funding_policy_mode=release
-if [[ "${1:-}" == "--allow-unbenchmarked" ]]; then
-  funding_policy_mode=structure
-  shift
-fi
+compose_dir="${repo_root}/compose"
+compose_file="${compose_dir}/compose.yaml"
+funding_targets_file="${FUNDING_TARGETS_FILE:-${repo_root}/deployment/funding-targets.json}"
 environment_file="${1:-${repo_root}/deployment/sandbox.env.example}"
 rendered=$(mktemp)
 images=$(mktemp)
 default_services=$(mktemp)
-trap 'rm -f "$rendered" "$images" "$default_services"' EXIT
+default_model=$(mktemp)
+trap 'rm -f "$rendered" "$images" "$default_services" "$default_model"' EXIT
 
 cd "$repo_root"
 
-source "${repo_root}/tools/lib/funding-policy.sh"
-sandbox_validate_funding_policy \
-  "${repo_root}/deployment/funding-policy.json" \
-  "$funding_policy_mode"
-while IFS= read -r locked_release_value; do
-  if ! grep -Fq "$locked_release_value" "${repo_root}/deployment/versions.lock.yaml"; then
-    echo "Funding policy release value is absent from deployment/versions.lock.yaml: ${locked_release_value}" >&2
-    exit 1
-  fi
-done < <(
-  jq -r '
-    .release |
-    [
-      .protocol,
-      .protocol_commit,
-      .zksync_os_server,
-      .zksync_os_server_commit,
-      .zk_deployer_commit,
-      .prividium,
-      .prividium_commit,
-      .watchdog,
-      .watchdog_commit
-    ][]
-  ' "${repo_root}/deployment/funding-policy.json"
-)
+source "${repo_root}/tools/lib/funding-targets.sh"
+sandbox_validate_funding_targets "$funding_targets_file"
 
 compose_modules=(
-  docker-compose-platform.yaml
-  docker-compose-permissioning.yaml
-  docker-compose-explorer.yaml
-  docker-compose-monitoring.yaml
-  docker-compose-optional.yaml
-  docker-compose-demos.yaml
+  platform.yaml
+  permissioning.yaml
+  explorer.yaml
+  monitoring.yaml
+  optional.yaml
+  demos.yaml
 )
 for module in "${compose_modules[@]}"; do
-  if [[ ! -s "$module" ]]; then
+  if [[ ! -s "${compose_dir}/${module}" ]]; then
     echo "Compose module is missing or empty: ${module}" >&2
     exit 1
   fi
-  if ! grep -Fq -- "- ${module}" docker-compose.yaml; then
+  if ! grep -Fq -- "- ${module}" "$compose_file"; then
     echo "Root Compose entrypoint does not include ${module}" >&2
     exit 1
   fi
 done
-if [[ -e docker-compose-deps.yaml || -e docker-compose-examples.yaml ]]; then
+if [[ -e "${compose_dir}/docker-compose-deps.yaml" ||
+      -e "${compose_dir}/docker-compose-examples.yaml" ]]; then
   echo "Legacy monolithic Compose files must not be restored" >&2
   exit 1
 fi
-if grep -Eq '^  institutional-demo[^:]*:' docker-compose-optional.yaml; then
-  echo "Demo services must remain isolated in docker-compose-demos.yaml" >&2
+if grep -Eq '^  institutional-demo[^:]*:' "${compose_dir}/optional.yaml"; then
+  echo "Demo services must remain isolated in compose/demos.yaml" >&2
   exit 1
 fi
-if ! grep -Eq '^  institutional-demo:' docker-compose-demos.yaml; then
-  echo "docker-compose-demos.yaml does not define the institutional demo app" >&2
+if ! grep -Eq '^  institutional-demo:' "${compose_dir}/demos.yaml"; then
+  echo "compose/demos.yaml does not define the institutional demo app" >&2
   exit 1
 fi
 
-docker compose --env-file "$environment_file" config --services >"$default_services"
+docker compose -f "$compose_file" \
+  --env-file "$environment_file" config --services >"$default_services"
+docker compose -f "$compose_file" \
+  --env-file "$environment_file" config --format json >"$default_model"
 compose_profiles=(--profile chain-bootstrap --profile sso --profile webhook --profile institutional-demo)
-docker compose --env-file "$environment_file" "${compose_profiles[@]}" config >"$rendered"
-docker compose --env-file "$environment_file" "${compose_profiles[@]}" config --images >"$images"
+docker compose -f "$compose_file" \
+  --env-file "$environment_file" "${compose_profiles[@]}" config >"$rendered"
+docker compose -f "$compose_file" \
+  --env-file "$environment_file" "${compose_profiles[@]}" config --images >"$images"
+
+if ! jq -e '
+  (.services | keys | sort) == [
+    "admin-panel",
+    "block-explorer-api",
+    "block-explorer-app",
+    "block-explorer-data-fetcher",
+    "block-explorer-worker",
+    "caddy",
+    "chain-preflight",
+    "grafana",
+    "keycloak",
+    "operator-balance-exporter",
+    "postgres",
+    "prividium-api",
+    "prometheus",
+    "user-panel",
+    "zksyncos"
+  ] and
+  .services["chain-preflight"].restart == "no" and
+  (.services |
+    to_entries |
+    all(
+      .key == "chain-preflight" or
+      .value.restart == "unless-stopped"
+    )) and
+  ([
+    .services |
+    to_entries[] |
+    select(.value.build != null) |
+    .key
+  ] | sort) == [
+    "chain-preflight",
+    "operator-balance-exporter"
+  ]
+' "$default_model" >/dev/null; then
+  echo "Default Compose model must contain the exact 14 long-running services and chain-preflight job" >&2
+  exit 1
+fi
 
 if grep -Eqi 'https?://localhost|host\.docker\.internal|image:.*:latest([@[:space:]]|$)|^[[:space:]]+l1:[[:space:]]*$' "$rendered"; then
   echo "Rendered Compose contains a local-only host, Anvil, or a latest image" >&2
@@ -122,8 +143,72 @@ if ! grep -B8 -A2 'published: "3100"' "$rendered" | grep -q 'host_ip: 127.0.0.1'
   exit 1
 fi
 
-if [[ "$(jq '.users | length' dev/keycloak/realm-export.json)" != "1" ]]; then
-  echo "The core Keycloak realm must contain exactly one sandbox administrator" >&2
+if ! jq -e '
+  [
+    .users[] |
+    {
+      id,
+      username,
+      email,
+      emailVerified,
+      enabled,
+      requiredActions,
+      credentials: [.credentials[] | {type, value, temporary}],
+      realmRoles
+    }
+  ] == [
+    {
+      "id": "00000000-0000-0000-0000-000000000001",
+      "username": "${SANDBOX_ADMIN_EMAIL}",
+      "email": "${SANDBOX_ADMIN_EMAIL}",
+      "emailVerified": true,
+      "enabled": true,
+      "requiredActions": ["UPDATE_PASSWORD"],
+      "credentials": [{
+        "type": "password",
+        "value": "${SANDBOX_ADMIN_PASSWORD}",
+        "temporary": true
+      }],
+      "realmRoles": ["admin", "user"]
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000002",
+      "username": "${SANDBOX_USER_1_EMAIL}",
+      "email": "${SANDBOX_USER_1_EMAIL}",
+      "emailVerified": true,
+      "enabled": true,
+      "requiredActions": [],
+      "credentials": [{
+        "type": "password",
+        "value": "${SANDBOX_USER_1_PASSWORD}",
+        "temporary": false
+      }],
+      "realmRoles": ["user"]
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000003",
+      "username": "${SANDBOX_USER_2_EMAIL}",
+      "email": "${SANDBOX_USER_2_EMAIL}",
+      "emailVerified": true,
+      "enabled": true,
+      "requiredActions": [],
+      "credentials": [{
+        "type": "password",
+        "value": "${SANDBOX_USER_2_PASSWORD}",
+        "temporary": false
+      }],
+      "realmRoles": ["user"]
+    }
+  ]
+' dev/keycloak/realm-export.json >/dev/null; then
+  echo "The core Keycloak realm must contain the exact three evaluation users" >&2
+  exit 1
+fi
+oidc_admin_subs=$(awk '
+  /^[[:space:]]+OIDC_ADMIN_SUBS:/ { print $2 }
+' "$rendered")
+if [[ "$oidc_admin_subs" != "00000000-0000-0000-0000-000000000001" ]]; then
+  echo "OIDC_ADMIN_SUBS must contain only the sandbox administrator subject" >&2
   exit 1
 fi
 

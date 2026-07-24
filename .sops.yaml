@@ -1,4 +1,4 @@
-# The age recipient is supplied explicitly by tools/init-secrets. Keeping it out
-# of this file lets each sandbox operator use their own age identity.
+# The initialization CLI supplies the age recipient explicitly. Keeping it out
+# of this file allows either the generated local identity or an operator override.
 creation_rules:
   - path_regex: deployment/secrets/.*\.enc\.env$

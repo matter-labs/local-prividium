@@ -7,7 +7,6 @@
     "scripts": {
         "deploy-contracts": "tsx scripts/deploy-contracts.ts",
         "setup-permissions": "tsx scripts/setup-permissions.ts",
-        "setup-watchdog-permissions": "tsx scripts/setup-watchdog-permissions.ts",
         "setup-webhook-permissions": "tsx scripts/setup-webhook-permissions.ts",
         "setup-multi-org-demo": "tsx scripts/setup-multi-org-demo.ts"
     },

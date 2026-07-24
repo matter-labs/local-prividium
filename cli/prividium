@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+
+PRIVIDIUM_REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+export PRIVIDIUM_REPO_ROOT
+
+# The public CLI owns its internal paths, image identity, and health timeout.
+# Only documented initialization values, age overrides, and broadcast
+# confirmation are accepted from the invoking environment.
+unset \
+  CHAIN_BOOTSTRAP_MODE \
+  DEPLOYMENT_SUMMARY_PATH \
+  ETH_RPC_TIMEOUT \
+  FUNDING_TARGETS_FILE \
+  INCOMPLETE_SUMMARY_PATH \
+  PRIVIDIUM_CHAIN_BOOTSTRAP_IMAGE \
+  PRIVIDIUM_HOST_GID \
+  PRIVIDIUM_HOST_UID \
+  PUBLIC_MANIFEST_PATH \
+  ROLE_REPORT_PATH \
+  SANDBOX_ENV_FILE \
+  SANDBOX_SECRETS_FILE \
+  SUMMARY_POLL_SECONDS \
+  SUMMARY_TIMEOUT_SECONDS
+
+source "${PRIVIDIUM_REPO_ROOT}/cli/commands/common.sh"
+
+prividium_usage() {
+  cat <<'EOF'
+Prividium sandbox CLI
+
+Usage:
+  ./cli/prividium <command> [options]
+  ./cli/prividium --help
+
+Commands:
+  host       Assess a dedicated evaluation VPS with read-only Ansible
+  init       Initialize an evaluation sandbox
+  fund       Fund identities required for protocol deployment
+  preflight  Check evaluation prerequisites before protocol preparation
+  prepare    Prepare runtime state and simulate protocol deployment
+  broadcast  Broadcast the prepared protocol deployment to Sepolia
+  deploy     Start and validate the sandbox services
+
+Evaluation workflow:
+  ./cli/prividium host preflight --inventory ansible/inventory/hosts.ini
+  ./cli/prividium init
+  ./cli/prividium fund
+  ./cli/prividium preflight
+  ./cli/prividium prepare
+  ./cli/prividium broadcast
+  ./cli/prividium deploy
+
+Run ./cli/prividium <command> --help for command-specific help.
+EOF
+}
+
+command="${1:-help}"
+shift || true
+if [[ "$command" != "init" ]]; then
+  prividium_clear_runtime_values
+fi
+
+case "$command" in
+  help|-h|--help)
+    if (( $# )); then
+      prividium_fail "unexpected argument: $1"
+    fi
+    prividium_usage
+    ;;
+  init)
+    source "${PRIVIDIUM_REPO_ROOT}/cli/commands/init.sh"
+    prividium_init "$@"
+    ;;
+  host)
+    source "${PRIVIDIUM_REPO_ROOT}/cli/commands/host.sh"
+    prividium_host "$@"
+    ;;
+  fund)
+    source "${PRIVIDIUM_REPO_ROOT}/cli/commands/fund.sh"
+    prividium_fund "$@"
+    ;;
+  preflight)
+    source "${PRIVIDIUM_REPO_ROOT}/cli/commands/preflight.sh"
+    prividium_preflight "$@"
+    ;;
+  prepare)
+    source "${PRIVIDIUM_REPO_ROOT}/cli/commands/prepare.sh"
+    prividium_prepare "$@"
+    ;;
+  broadcast)
+    source "${PRIVIDIUM_REPO_ROOT}/cli/commands/broadcast.sh"
+    prividium_broadcast "$@"
+    ;;
+  deploy)
+    source "${PRIVIDIUM_REPO_ROOT}/cli/commands/deploy.sh"
+    prividium_deploy "$@"
+    ;;
+  *)
+    echo "Unknown command: ${command}" >&2
+    prividium_usage >&2
+    exit 1
+    ;;
+esac

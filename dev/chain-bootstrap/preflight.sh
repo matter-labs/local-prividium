@@ -107,7 +107,7 @@ check_operator() {
     echo "The ${role} operator key does not match the public manifest" >&2
     exit 1
   fi
-  balance=$(cast balance "$actual" --wei --rpc-url "$SEPOLIA_RPC_URL")
+  balance=$(cast balance "$actual" --rpc-url "$SEPOLIA_RPC_URL")
   if (( balance < minimum_balance )); then
     echo "The ${role} operator has insufficient Sepolia ETH (${balance} wei)" >&2
     exit 1

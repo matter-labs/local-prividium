@@ -1,0 +1,408 @@
+---
+- name: Validate non-secret preflight inputs
+  ansible.builtin.assert:
+    that:
+      - prividium_operator_user is string
+      - prividium_operator_user is match('^[a-z_][a-z0-9_-]{0,31}$')
+      - prividium_operator_public_key is string
+      - >-
+        prividium_operator_public_key is
+        match('^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(256|384|521)) [A-Za-z0-9+/=]+(?: .*)?$')
+      - "'REPLACE_' not in prividium_operator_public_key"
+      - prividium_ssh_port | int >= 1
+      - prividium_ssh_port | int <= 65535
+      - prividium_ssh_allowed_cidrs is sequence
+      - prividium_ssh_allowed_cidrs is not string
+      - prividium_ssh_allowed_cidrs | length > 0
+      - >-
+        ('0.0.0.0/0' not in prividium_ssh_allowed_cidrs and
+        '::/0' not in prividium_ssh_allowed_cidrs) or
+        prividium_unrestricted_ssh_acknowledged | bool
+      - prividium_ipv6_policy in ['configured', 'disabled']
+      - prividium_provider_recovery_confirmed | bool
+      - prividium_enable_http3 | bool
+      - prividium_runtime_dir == '/etc/prividium/runtime'
+      - ansible_password is not defined
+      - ansible_ssh_pass is not defined
+    fail_msg: >-
+      Host intent is incomplete or unsafe. Supply a real operator public key,
+      a valid SSH port, one or more approved CIDRs, confirmed provider recovery
+      access, and an explicit IPv6 policy. Unrestricted SSH requires the
+      separate acknowledgement variable; password-based Ansible connections
+      are not supported.
+    success_msg: Non-secret host intent is complete.
+
+- name: Validate administrative source CIDR syntax
+  ansible.builtin.command:
+    argv:
+      - "{{ ansible_facts.python.executable }}"
+      - -c
+      - >-
+        import ipaddress,json,sys;
+        values=json.loads(sys.argv[1]);
+        [ipaddress.ip_network(value, strict=True) for value in values]
+      - "{{ prividium_ssh_allowed_cidrs | to_json }}"
+  changed_when: false
+  check_mode: false
+
+- name: Gather installed package facts
+  ansible.builtin.package_facts:
+    manager: auto
+
+- name: Gather service facts
+  ansible.builtin.service_facts:
+
+- name: Inspect the operator authorized-keys file
+  ansible.builtin.stat:
+    path: "{{ ansible_facts.user_dir }}/.ssh/authorized_keys"
+    follow: false
+  register: host_preflight_authorized_keys_path
+
+- name: Read the operator authorized-keys file
+  ansible.builtin.slurp:
+    path: "{{ ansible_facts.user_dir }}/.ssh/authorized_keys"
+  no_log: true
+  register: host_preflight_authorized_keys
+  when: host_preflight_authorized_keys_path.stat.isreg | default(false)
+
+- name: Inspect the protected runtime path
+  ansible.builtin.stat:
+    path: "{{ prividium_runtime_dir }}"
+    follow: false
+  register: host_preflight_runtime_path
+
+- name: Inspect the host IPv6 policy
+  ansible.builtin.stat:
+    path: /proc/sys/net/ipv6/conf/all/disable_ipv6
+    follow: false
+  register: host_preflight_ipv6_control
+
+- name: Read the host IPv6 policy
+  ansible.builtin.slurp:
+    path: /proc/sys/net/ipv6/conf/all/disable_ipv6
+  register: host_preflight_ipv6_disabled_raw
+  when: host_preflight_ipv6_control.stat.exists
+
+- name: Inspect listening TCP and UDP sockets
+  ansible.builtin.command:
+    argv:
+      - ss
+      - -H
+      - -lntu
+  changed_when: false
+  check_mode: false
+  register: host_preflight_socket_state
+
+- name: Verify passwordless sudo access
+  ansible.builtin.command:
+    argv:
+      - id
+      - -u
+  become: true
+  changed_when: false
+  check_mode: false
+  register: host_preflight_sudo_probe
+
+- name: Inspect system time synchronization
+  ansible.builtin.command:
+    argv:
+      - timedatectl
+      - show
+      - --property=NTPSynchronized
+      - --value
+  changed_when: false
+  check_mode: false
+  failed_when: false
+  register: host_preflight_time_state
+
+- name: Inspect the Docker client
+  ansible.builtin.command:
+    argv:
+      - docker
+      - --version
+  changed_when: false
+  check_mode: false
+  failed_when: false
+  register: host_preflight_docker_version
+
+- name: Inspect existing Docker containers
+  ansible.builtin.command:
+    argv:
+      - docker
+      - ps
+      - --all
+      - --quiet
+  become: true
+  changed_when: false
+  check_mode: false
+  failed_when: false
+  register: host_preflight_docker_containers
+  when: host_preflight_docker_version.rc == 0
+
+- name: Inspect current UFW policy
+  ansible.builtin.command:
+    argv:
+      - ufw
+      - status
+      - verbose
+  become: true
+  changed_when: false
+  check_mode: false
+  failed_when: false
+  register: host_preflight_ufw_state
+  when: "'ufw' in ansible_facts.packages"
+
+- name: Check required outbound HTTPS endpoints
+  ansible.builtin.uri:
+    url: "{{ item.url }}"
+    method: GET
+    return_content: false
+    status_code: "{{ item.status_codes }}"
+    timeout: 15
+    validate_certs: true
+  changed_when: false
+  check_mode: false
+  failed_when: false
+  loop: "{{ host_preflight_outbound_endpoints }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: host_preflight_outbound_results
+
+- name: Derive preflight evidence
+  ansible.builtin.set_fact:
+    host_preflight_root_mounts: >-
+      {{
+        ansible_facts.mounts
+        | selectattr('mount', 'equalto', '/')
+        | list
+      }}
+    host_preflight_reserved_listener_lines: >-
+      {{
+        host_preflight_socket_state.stdout_lines
+        | select('search', ':(' ~ (host_preflight_reserved_ports | join('|')) ~ ')(\\s|$)')
+        | list
+      }}
+    host_preflight_detected_conflicting_services: >-
+      {{
+        ansible_facts.services
+        | dict2items
+        | selectattr('key', 'in', host_preflight_conflicting_services)
+        | map(attribute='key')
+        | list
+      }}
+    host_preflight_active_time_services: >-
+      {{
+        ansible_facts.services
+        | dict2items
+        | selectattr('key', 'in', host_preflight_time_services)
+        | selectattr('value.state', 'equalto', 'running')
+        | map(attribute='key')
+        | list
+      }}
+    host_preflight_operator_key_present: >-
+      {{
+        (
+          host_preflight_authorized_keys.content
+          | default('')
+          | b64decode
+        ) is search(
+          '(^|\\s)'
+          ~ (
+            prividium_operator_public_key.split()[0:2]
+            | join(' ')
+            | regex_escape
+          )
+          ~ '(\\s|$)'
+        )
+      }}
+    host_preflight_missing_packages: >-
+      {{
+        host_preflight_expected_packages
+        | difference(ansible_facts.packages.keys() | list)
+        | sort
+      }}
+    host_preflight_outbound_failures: >-
+      {{
+        host_preflight_outbound_results.results
+        | selectattr('status', 'undefined')
+        | map(attribute='item.name')
+        | list
+      }}
+
+- name: Include unexpected outbound status codes
+  ansible.builtin.set_fact:
+    host_preflight_outbound_failures: >-
+      {{
+        host_preflight_outbound_failures
+        + [item.item.name]
+      }}
+  loop: "{{ host_preflight_outbound_results.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  when:
+    - item.status is defined
+    - item.status | int not in item.item.status_codes
+
+- name: Derive root disk and IPv6 evidence
+  ansible.builtin.set_fact:
+    host_preflight_root_disk_bytes: >-
+      {{
+        (
+          host_preflight_root_mounts
+          | first
+          | default({})
+        ).size_total
+        | default(0)
+        | int
+      }}
+    host_preflight_ipv6_disabled: >-
+      {{
+        not host_preflight_ipv6_control.stat.exists
+        or
+        (
+          host_preflight_ipv6_disabled_raw.content
+          | default('MAo=')
+          | b64decode
+          | trim
+        ) == '1'
+      }}
+
+- name: Report collected host evidence
+  ansible.builtin.debug:
+    msg:
+      target: "{{ inventory_hostname }} ({{ ansible_host | default(inventory_hostname) }})"
+      connection: >-
+        {{ ansible_user_id }} over SSH port
+        {{ ansible_port | default(22) }}
+      platform: >-
+        {{ ansible_facts.distribution }}
+        {{ ansible_facts.distribution_version }}
+        {{ ansible_facts.architecture }}
+      capacity: >-
+        {{ ansible_facts.processor_vcpus }} vCPU,
+        {{ ansible_facts.memtotal_mb }} MiB RAM,
+        {{ host_preflight_root_disk_bytes }} root bytes
+      ipv4: "{{ ansible_facts.default_ipv4.address | default('not detected') }}"
+      ipv6_policy: >-
+        requested={{ prividium_ipv6_policy }},
+        host_disabled={{ host_preflight_ipv6_disabled }}
+      firewall: >-
+        ufw_installed={{ 'ufw' in ansible_facts.packages }},
+        ufw_status={{
+          host_preflight_ufw_state.stdout_lines
+          | default([])
+          | first
+          | default('not available')
+        }}
+      docker: >-
+        client={{
+          host_preflight_docker_version.stdout
+          | default('not installed')
+          | trim
+          | default('not installed', true)
+        }},
+        containers={{
+          host_preflight_docker_containers.stdout_lines
+          | default([])
+          | length
+        }}
+      reserved_listeners: "{{ host_preflight_reserved_listener_lines }}"
+      conflicting_services: "{{ host_preflight_detected_conflicting_services }}"
+      runtime_exists: "{{ host_preflight_runtime_path.stat.exists }}"
+      operator_key_present: "{{ host_preflight_operator_key_present }}"
+      time_synchronized: >-
+        {{
+          host_preflight_time_state.stdout
+          | default('unknown')
+          | trim
+          | default('unknown', true)
+        }}
+      missing_baseline_packages: "{{ host_preflight_missing_packages }}"
+      outbound_failures: "{{ host_preflight_outbound_failures | unique | list }}"
+
+- name: Enforce the supported host boundary
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.system == 'Linux'
+      - ansible_facts.distribution == host_preflight_supported_distribution
+      - >-
+        ansible_facts.distribution_version is
+        version(host_preflight_supported_release, '>=')
+      - >-
+        ansible_facts.distribution_version is
+        version('24.05', '<')
+      - ansible_facts.architecture in host_preflight_supported_architectures
+      - ansible_facts.service_mgr == 'systemd'
+      - ansible_facts.processor_vcpus | int >= host_preflight_minimum_vcpus
+      - ansible_facts.memtotal_mb | int >= host_preflight_minimum_memory_mb
+      - host_preflight_root_disk_bytes | int >= host_preflight_minimum_root_disk_bytes
+      - ansible_user_id == prividium_operator_user
+      - ansible_port | default(22) | int == prividium_ssh_port | int
+      - host_preflight_authorized_keys_path.stat.isreg | default(false)
+      - host_preflight_operator_key_present
+      - host_preflight_sudo_probe.stdout | trim == '0'
+      - >-
+        (prividium_ipv6_policy == 'disabled' and host_preflight_ipv6_disabled)
+        or
+        (prividium_ipv6_policy == 'configured' and not host_preflight_ipv6_disabled)
+      - host_preflight_detected_conflicting_services | length == 0
+      - >-
+        host_preflight_allow_existing_runtime
+        or not host_preflight_runtime_path.stat.exists
+      - >-
+        host_preflight_allow_existing_containers
+        or
+        (
+          host_preflight_docker_containers.stdout_lines
+          | default([])
+          | length
+        ) == 0
+      - >-
+        host_preflight_allow_reserved_listeners
+        or host_preflight_reserved_listener_lines | length == 0
+      - host_preflight_outbound_failures | unique | list | length == 0
+    fail_msg: >-
+      This VPS is outside the supported evaluation boundary. Review the host
+      evidence above for the unsupported platform or capacity, connection
+      mismatch, IPv6-policy mismatch, existing runtime/containers, conflicting
+      services/listeners, or outbound-connectivity failure. Preflight made no
+      host changes.
+    success_msg: >-
+      READ-ONLY HOST PREFLIGHT PASSED. The VPS is compatible with the
+      Prividium evaluation host contract.
+
+- name: Report CPU recommendation
+  ansible.builtin.debug:
+    msg: >-
+      CPU compatibility passed with {{ ansible_facts.processor_vcpus }} vCPU.
+      {{ host_preflight_recommended_vcpus }} vCPU remains recommended for
+      faster preparation, startup, and catch-up, but is not required for an
+      evaluation deployment.
+  when:
+    - ansible_facts.processor_vcpus | int < host_preflight_recommended_vcpus
+
+- name: Report installable baseline gaps
+  ansible.builtin.debug:
+    msg: >-
+      Compatibility passed. A future install milestone still needs to address:
+      missing_packages={{ host_preflight_missing_packages }},
+      active_time_service={{ host_preflight_active_time_services }},
+      time_synchronized={{
+        host_preflight_time_state.stdout
+        | default('unknown')
+        | trim
+        | default('unknown', true)
+      }},
+      ufw_active={{
+        (
+          host_preflight_ufw_state.stdout
+          | default('')
+        ) is search('Status: active')
+      }},
+      docker_client_present={{ host_preflight_docker_version.rc == 0 }},
+      docker_daemon_ready={{
+        host_preflight_docker_containers.rc
+        | default(-1)
+        | int == 0
+      }}.
+      No remediation was attempted.

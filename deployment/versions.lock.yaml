@@ -38,11 +38,6 @@ products:
       worker: ghcr.io/matter-labs/block-explorer-worker:v3.29.5@sha256:1bdbdf3ded5a9902b01d624b8704fce5f977a74db34b86a557eaa18e99480efe
       data_fetcher: ghcr.io/matter-labs/block-explorer-data-fetcher:v3.29.5@sha256:c3731530bc9544d3d80e68c0d8b59b6c78060498b9cdce455340a3ec882af209
     milestone: active
-  watchdog:
-    version: v1.0.17
-    source_commit: 1edb60407b4b05eaba12f03337ef9f91e7388f27
-    build_image: local/prividium-watchdog:v1.0.17-1edb604
-    milestone: active
   airbender:
     version: v0.8.1
     source_commit: 52e19931752bbd037a193cb837bd098822325431
@@ -65,24 +60,22 @@ build_images:
   entrypoint_deployer: local/prividium-entrypoint-deployer:v1.276.0-sandbox.1
   sso_setup: local/prividium-sso-setup:v1.276.0-sandbox.1
   operator_balance_exporter: local/prividium-operator-balance-exporter:sandbox.1
-  watchdog: local/prividium-watchdog:v1.0.17-1edb604
   zk_deployer: local/zk-deployer:16c6a83-protocol-e091691
 
 build_bases:
   node_22_slim: node:22-slim@sha256:6c74791e557ce11fc957704f6d4fe134a7bc8d6f5ca4403205b2966bd488f6b3
-  node_24_alpine: node:24.18.0-alpine@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd
   foundry: ghcr.io/foundry-rs/foundry:v1.5.1@sha256:3a70bfa9bd2c732a767bb60d12c8770b40e8f9b6cca28efc4b12b1be81c7f28e
   rust_bookworm: rust:bookworm@sha256:77fac8b98f9f46062bb680b6d25d5bcaabfc400143952ebc572e924bcbedc3fa
   debian_bookworm_slim: debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818
 
 optional_profiles:
   sso:
-    compose_file: docker-compose-optional.yaml
+    compose_file: compose/optional.yaml
     services: [sso-funds, entrypoint-deployer, bundler, sso-runtime-init, contracts-extractor, sso-contracts-deployer, sso-permissions-setup, auth-server-api, auth-server]
   webhook:
-    compose_file: docker-compose-optional.yaml
+    compose_file: compose/optional.yaml
     services: [webhook-permissions-setup, zksync-webhook-service]
   institutional_demo:
-    compose_file: docker-compose-demos.yaml
+    compose_file: compose/demos.yaml
     compose_profile: institutional-demo
     requires: [sso]

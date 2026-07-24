@@ -9,6 +9,7 @@ readonly chainlist_url="https://chainid.network/chains.json"
 
 required=(
   BOOTSTRAP_MODE L2_CHAIN_ID SEPOLIA_RPC_URL
+  PREPARED_IMAGE_ID
   L1_DEPLOYER_PRIVATE_KEY
   ECOSYSTEM_GOVERNOR_PRIVATE_KEY
   CHAIN_OWNER_PRIVATE_KEY FEE_ACCOUNT_PRIVATE_KEY
@@ -21,17 +22,18 @@ for name in "${required[@]}"; do
     exit 1
   fi
 done
+if [[ ! "$PREPARED_IMAGE_ID" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+  echo "PREPARED_IMAGE_ID must be an immutable Docker image identity" >&2
+  exit 1
+fi
 
 if [[ ! "$L2_CHAIN_ID" =~ ^[0-9]+$ ]] || (( L2_CHAIN_ID < 1073741824 || L2_CHAIN_ID > 2147483647 )); then
   echo "L2_CHAIN_ID must be in the high 31-bit range 1073741824..2147483647" >&2
   exit 1
 fi
-if [[ -s /public/manifest.json ]]; then
-  existing_manifest_chain_id=$(jq -r '.l2_chain_id' /public/manifest.json)
-  if [[ "$existing_manifest_chain_id" != "$L2_CHAIN_ID" ]]; then
-    echo "Refusing to replace immutable public metadata for chain ${existing_manifest_chain_id} with ${L2_CHAIN_ID}" >&2
-    exit 1
-  fi
+if [[ -e /public/manifest.json || -L /public/manifest.json ]]; then
+  echo "Refusing to replace an existing public protocol manifest" >&2
+  exit 1
 fi
 
 actual_l1_chain_id=$(cast chain-id --rpc-url "$SEPOLIA_RPC_URL")
@@ -59,7 +61,7 @@ check_deployment_balance() {
   local address
   local balance
   address=$(cast wallet address --private-key "$private_key")
-  balance=$(cast balance "$address" --wei --rpc-url "$SEPOLIA_RPC_URL")
+  balance=$(cast balance "$address" --rpc-url "$SEPOLIA_RPC_URL")
   if (( balance < ${DEPLOYMENT_SIGNER_MIN_L1_BALANCE_WEI:-10000000000000000} )); then
     echo "${role} ${address} has only ${balance} wei on Sepolia" >&2
     exit 1
@@ -167,13 +169,21 @@ ZK_DEPLOYER_ECOSYSTEM_GOVERNOR_ADDRESS=$(wallet_address "$ECOSYSTEM_GOVERNOR_PRI
 case "$BOOTSTRAP_MODE" in
   prepare)
     zk-deployer bootstrap "${common_bootstrap[@]}"
+    if [[ ! -s /runtime/chain/state.json ||
+          ! -s /runtime/chain/out/manifest.json ]]; then
+      echo "Bootstrap simulation did not produce state and manifest artifacts" >&2
+      exit 1
+    fi
+    prepared_state_sha256=$(sha256sum /runtime/chain/state.json | cut -d' ' -f1)
     prepared_manifest_sha256=$(sha256sum /runtime/chain/out/manifest.json | cut -d' ' -f1)
     jq -n \
       --arg generated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
       --argjson l2_chain_id "$L2_CHAIN_ID" \
       --arg zk_deployer_commit "$ZK_DEPLOYER_COMMIT" \
       --arg protocol_commit "$PROTOCOL_COMMIT" \
+      --arg state_sha256 "$prepared_state_sha256" \
       --arg manifest_sha256 "$prepared_manifest_sha256" \
+      --arg image_id "$PREPARED_IMAGE_ID" \
       '{
         schema_version: 1,
         generated_at: $generated_at,
@@ -183,7 +193,9 @@ case "$BOOTSTRAP_MODE" in
           zk_deployer: $zk_deployer_commit,
           protocol: $protocol_commit
         },
-        prepared_manifest_sha256: $manifest_sha256
+        chain_state_sha256: $state_sha256,
+        prepared_manifest_sha256: $manifest_sha256,
+        chain_bootstrap_image_id: $image_id
       }' >/runtime/chain/out/preparation.json
     chmod 0600 /runtime/chain/out/preparation.json
     echo
@@ -196,6 +208,40 @@ case "$BOOTSTRAP_MODE" in
     expected_confirmation="BROADCAST_SEPOLIA_${L2_CHAIN_ID}"
     if [[ "${CONFIRM_BROADCAST:-}" != "$expected_confirmation" ]]; then
       echo "Set CONFIRM_BROADCAST=${expected_confirmation} to authorize Sepolia writes" >&2
+      exit 1
+    fi
+    for prepared_artifact in \
+      /runtime/chain/state.json \
+      /runtime/chain/out/manifest.json \
+      /runtime/chain/out/preparation.json; do
+      if [[ ! -s "$prepared_artifact" ]]; then
+        echo "Prepared protocol artifact is missing: ${prepared_artifact}" >&2
+        exit 1
+      fi
+    done
+    prepared_state_sha256=$(sha256sum /runtime/chain/state.json | cut -d' ' -f1)
+    prepared_manifest_sha256=$(sha256sum /runtime/chain/out/manifest.json | cut -d' ' -f1)
+    if ! jq -e \
+      --argjson chain_id "$L2_CHAIN_ID" \
+      --arg zk_deployer_commit "$ZK_DEPLOYER_COMMIT" \
+      --arg protocol_commit "$PROTOCOL_COMMIT" \
+      --arg state_sha256 "$prepared_state_sha256" \
+      --arg manifest_sha256 "$prepared_manifest_sha256" \
+      --arg image_id "$PREPARED_IMAGE_ID" \
+      '
+        .schema_version == 1 and
+        .l1_chain_id == 11155111 and
+        .l2_chain_id == $chain_id and
+        (.generated_at |
+          type == "string" and
+          test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")) and
+        .sources.zk_deployer == $zk_deployer_commit and
+        .sources.protocol == $protocol_commit and
+        .chain_state_sha256 == $state_sha256 and
+        .prepared_manifest_sha256 == $manifest_sha256 and
+        .chain_bootstrap_image_id == $image_id
+      ' /runtime/chain/out/preparation.json >/dev/null; then
+      echo "Prepared execution inputs changed after simulation; rerun ./cli/prividium prepare" >&2
       exit 1
     fi
     ;;

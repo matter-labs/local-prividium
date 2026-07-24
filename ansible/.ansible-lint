@@ -1,0 +1,6 @@
+---
+profile: production
+skip_list:
+  # Public deployment inputs deliberately use one stable prividium_ namespace
+  # across roles instead of leaking role names into the customer contract.
+  - var-naming[no-role-prefix]

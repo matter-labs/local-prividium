@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "l1_chain_id": 11155111,
+  "targets_wei": {
+    "l1_deployer": "400000000000000000",
+    "ecosystem_governor": "100000000000000000",
+    "chain_owner": "100000000000000000",
+    "operator_commit": "50000000000000000",
+    "operator_prove": "50000000000000000",
+    "operator_execute": "50000000000000000"
+  }
+}

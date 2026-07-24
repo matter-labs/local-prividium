@@ -1,205 +1,154 @@
 # Prividium Sepolia Sandbox
 
-This repository deploys a persistent, single-VPS Prividium sandbox backed by a dedicated ZKsync ecosystem on Ethereum Sepolia.
+This repository provides a focused, single-VPS Prividium evaluation backed by a
+dedicated ZKsync ecosystem on Ethereum Sepolia.
 
 > [!CAUTION]
-> This is not a production deployment or an officially supported public testnet. It uses fake proofs, a testnet verifier, one VPS, and operator-funded Sepolia transactions. Do not use it to secure assets of value.
+> This is not a production deployment or an official public testnet. It uses
+> fake proofs, a testnet verifier, SOPS-managed hot keys, and one host. Never
+> use it to secure assets of value.
+
+## Evaluation workflow
+
+The CLI is the only customer-facing deployment interface. From a trusted
+Ansible controller, assess the dedicated VPS first:
+
+```bash
+./cli/prividium host preflight --inventory ansible/inventory/hosts.ini
+```
+
+Then run the application workflow on the VPS:
+
+```bash
+./cli/prividium init
+./cli/prividium fund
+./cli/prividium preflight
+./cli/prividium prepare
+./cli/prividium broadcast
+./cli/prividium deploy
+```
+
+The stages are deliberately explicit:
+
+- `init` creates the encrypted configuration, age identity, evaluation users,
+  generated identities, and public role inventory.
+- `fund` reconciles the three deployment and three settlement-operator
+  identities on Sepolia.
+- `preflight` performs read-only host, configuration, RPC, registry, DNS,
+  Compose, identity, and funding checks.
+- `prepare` creates the protected runtime, simulates protocol deployment, and
+  pulls/builds the default stack without submitting transactions.
+- `broadcast` requires chain-specific confirmation and creates the ecosystem
+  and chain contracts on Sepolia.
+- `deploy` requires public DNS, starts the prebuilt services, and validates the
+  public interfaces.
+
+See [the setup guide](runbooks/SETUP.md) for the complete walkthrough and
+[the evaluation guide](runbooks/EVALUATION.md) for the engineering and BD handoff
+checklist. The [evaluation VPS host contract](runbooks/HOST_CONTRACT.md)
+defines the supported boundary enforced by the read-only Ansible preflight.
 
 ## What runs
 
-- ZKsync OS `0.20.8` using Protocol `v0.31.0`, rollup DA, blobs, and 10-minute batches.
-- Prividium API, user panel, admin panel, and Block Explorer.
-- Keycloak backed by PostgreSQL with one initial sandbox administrator.
-- Caddy with automatic HTTPS for all browser-facing services.
-- Prometheus, Grafana, Watchdog, and an operator-balance exporter.
-- Optional SSO/EntryPoint/bundler, webhook, and institutional-demo profiles.
+- ZKsync OS `0.20.8` with Protocol `v0.31.0`, rollup DA, and fake proofs.
+- Prividium API, user panel, administration panel, and protected RPC.
+- PostgreSQL and a Keycloak realm with one administrator and two users.
+- Block Explorer application, API, worker, and data fetcher.
+- Caddy with automatic HTTPS.
+- Prometheus, Grafana, and settlement-operator balance monitoring.
 
-Anvil, deterministic development wallets, fixed passwords, the local faucet, and raw public RPC ports are not included.
+The default model has 14 long-running services and one successful one-shot
+`chain-preflight` job. It contains no service-wallet bridge. Starting the chain
+can still produce normal Sepolia transactions from the already-funded commit,
+prove, and execute operators.
+
+SSO, EntryPoint/bundler, webhook, and institutional-demo implementations remain
+in deferred Compose profiles. They are not started by the initial CLI and do
+not yet have public activation commands.
 
 ## Prerequisites
 
-- An x86-64 VPS with Docker Engine and Docker Compose v2.
+- A dedicated Ubuntu Server 24.04 LTS / amd64 VPS with Docker Engine and
+  Docker Compose v2.
+- Minimum CPU capacity: 4 vCPU.
 - Recommended capacity: 8 vCPU, 16 GB RAM, and 200 GB SSD.
-- An IPv4 address reachable on ports 80 and 443.
-- `A` records pointing to the VPS for the core stack:
+- Customer-approved SSH access, inbound TCP 80 and 443, and inbound UDP 443.
+- `A` records for `app`, `admin`, `api`, `explorer`, `explorer-api`, and `idp`
+  under the selected sandbox domain.
+- A private Sepolia RPC with historical calls/logs, receipts, and blob-fee
+  support.
+- A separate public, CORS-enabled Sepolia RPC for browser use.
+- `age`, `age-keygen`, `sops`, `cast`, `jq`, `openssl`, and `curl`.
+- Access to the pinned private Prividium images on Quay.
+- Sepolia ETH for the six protocol identities.
 
-  `app`, `admin`, `api`, `explorer`, `explorer-api`, and `idp` under the selected sandbox domain.
-
-- Optional `auth` and `auth-api` records for the `sso` profile, and `demo` for the institutional profile.
-
-- A private Sepolia RPC with historical calls, logs, receipts, and blob transaction support.
-- A separate public, CORS-enabled Sepolia RPC for browser bridging.
-- `age`, `sops`, `cast`, `jq`, `openssl`, and `curl` on the target VPS; the
-  current playbook runs the operator commands there.
-- Access to the Matter Labs private images on Quay.
-
-## Deployment
-
-The repository exposes one operator command: `tools/sandbox`. Use **2–4 hours
-elapsed time** as the initial execution-planning target after prerequisites are
-ready; replace that target with measured rehearsal data before customer
-release. It excludes delays obtaining Sepolia ETH, private-image access, a
-capable RPC, and DNS/ACME propagation.
-
-Prospective customer engineering teams should start with the [Enterprise
-Adoption Guide](docs/enterprise-adoption/README.md). It explains the system,
-responsibility split, prerequisites, security boundary, deployment gates,
-expected timing, acceptance journey, and evaluation risks.
-
-The [core deployment
-playbook](docs/enterprise-adoption/03-core-deployment-playbook.md) is the
-canonical first-deployment procedure for a customer engagement. The [guided
-setup](docs/SETUP.md) is a repository-level technical companion and must remain
-consistent with that playbook.
-
-The core execution sequence is below; the canonical playbook defines the
-required release verification, SOPS access, reviews, evidence, and stop/go
-gates around these commands:
-
-```bash
-tools/sandbox doctor
-tools/sandbox init
-
-sudo install -d -m 0700 -o "$USER" /etc/prividium/runtime
-tools/sandbox decrypt
-tools/sandbox funding
-tools/sandbox funding apply
-tools/sandbox prepare
-docker compose \
-  --env-file /etc/prividium/runtime/sandbox.env \
-  pull --ignore-buildable
-docker compose \
-  --env-file /etc/prividium/runtime/sandbox.env \
-  build
-tools/sandbox readiness
-tools/sandbox broadcast
-tools/sandbox deploy
-```
-
-Initialization writes a commit-safe role inventory grouped by purpose. After
-the release benchmark is complete, the target core policy asks the customer to
-send exactly **1 Sepolia ETH to one address**: the sandbox funding wallet shown
-in `deployment/public/roles.md`. `funding` writes a protected, reviewable
-allocation plan; `funding apply` confirms that exact plan and distributes only
-current shortfalls.
-
-`broadcast` reruns the mandatory readiness gate and is the only step that
-submits the ecosystem deployment to Sepolia. `deploy` waits for core service
-health plus HTTPS, protected API, Explorer, and OIDC checks before writing the
-commit-safe final summary.
-
-The broadcast writes `deployment/public/manifest.json`. Review and commit this
-non-secret record after checking its addresses and transaction hashes.
-
-## Repository layout
-
-`docker-compose.yaml` is the only Compose entrypoint. It includes smaller files
-that can be reviewed independently:
-
-| File | Responsibility |
-| --- | --- |
-| `docker-compose.yaml` | Core Prividium API, user/admin applications, and Caddy |
-| `docker-compose-platform.yaml` | PostgreSQL, Keycloak, chain bootstrap, and ZKsync OS |
-| `docker-compose-explorer.yaml` | Block Explorer UI, API, worker, and data fetcher |
-| `docker-compose-permissioning.yaml` | Idempotent Watchdog, SSO, and webhook permissions |
-| `docker-compose-monitoring.yaml` | Watchdog, Prometheus, Grafana, and balance monitoring |
-| `docker-compose-optional.yaml` | SSO/bundler and webhook runtime |
-| `docker-compose-demos.yaml` | Institutional demo identity, funding, deployment, seed, and app |
-
-See [deployment components](docs/COMPONENTS.md) for profiles, networks,
-persistence, and startup dependencies.
-
-## Public endpoints
+## Public interfaces
 
 For `SANDBOX_DOMAIN=sandbox.example.com`:
 
-| Component | URL |
+| Interface | URL |
 | --- | --- |
-| User panel | `https://app.sandbox.example.com` |
-| Admin panel | `https://admin.sandbox.example.com` |
-| Protected API/RPC | `https://api.sandbox.example.com` |
+| User application | `https://app.sandbox.example.com` |
+| Administration | `https://admin.sandbox.example.com` |
+| Protected API and RPC | `https://api.sandbox.example.com` |
 | Block Explorer | `https://explorer.sandbox.example.com` |
 | Explorer API | `https://explorer-api.sandbox.example.com` |
-| SSO (optional) | `https://auth.sandbox.example.com` |
-| SSO API (optional) | `https://auth-api.sandbox.example.com` |
 | OIDC issuer | `https://idp.sandbox.example.com/realms/prividium` |
-| Institutional demo (optional) | `https://demo.sandbox.example.com` |
 
-Keycloak administration, PostgreSQL, Prometheus, bundler, webhook internals, and raw ZKsync OS RPC are not public. Grafana is bound to `127.0.0.1:3100` and is intended for an SSH tunnel.
+PostgreSQL, Keycloak administration, Prometheus, and raw ZKsync OS RPC are not
+published. Grafana binds to `127.0.0.1:3100` for access through an SSH tunnel.
 
-## Configuration and versions
+## Generated evidence
 
-- `deployment/sandbox.env.example` documents every public and secret setting.
-- `deployment/versions.lock.yaml` records component versions, source commits, and immutable registry digests.
-- `deployment/funding-policy.json` records the one-ETH allocation boundary and release benchmark.
-- `deployment/public/manifest.example.json` documents the on-chain manifest written by the bootstrap.
-- `deployment/public/roles.example.md` and `deployment/public/deployment-summary.example.md` document the public reports.
-- `tools/validate-stack` rejects local-only endpoints, legacy chain IDs, known development keys, floating remote images, and unexpected host ports.
+The focused track produces three commit-safe public records:
 
-Airbender `v0.8.1` remains selected but deferred; no prover service is started.
+| File | Purpose |
+| --- | --- |
+| `deployment/public/roles.md` | Generated identities and their roles |
+| `deployment/public/manifest.json` | Protocol addresses, genesis, locks, and transaction hashes |
+| `deployment/public/deployment-summary.md` | Healthy services and public endpoints |
 
-## Optional SSO, bundler, and webhooks
+Private keys, passwords, and provider credentials remain in the encrypted
+configuration or protected `/etc/prividium/runtime` files.
 
-> [!NOTE]
-> The procedures in this section are repository reference material. Optional
-> capabilities are outside the current Enterprise Adoption Guide milestone and
-> require a separately approved evaluation scope.
+## Repository structure
 
-The default deployment does not start SSO, EntryPoint deployment, the bundler, or webhooks. Their credentials are still generated independently and kept encrypted so either profile can be enabled later.
+The repository is organized by deployment interface and operational concern:
 
-For SSO, first add `auth` and `auth-api` DNS records, then:
-
-```bash
-tools/sandbox edit-secrets
-# Set BUNDLER_ENABLED=true, save, and exit the editor.
-tools/sandbox decrypt
-tools/sandbox enable sso
+```text
+.
+├── README.md
+├── schemas/                         # Reserved for deployment schemas
+├── cli/                             # Customer-facing deployment CLI
+├── ansible/                         # Read-only host preflight and role scaffolds
+├── compose/                         # Compose entrypoint and service modules
+├── releases/                        # Reserved for release manifests
+├── runbooks/                        # Setup, component, and evaluation guides
+├── skills/deploy-prividium/         # Reserved deployment skill
+├── mcp/prividium-deployment-server/ # Reserved deployment MCP server
+├── deployment/                      # Sandbox configuration and public output
+├── dev/                             # Container build and runtime assets
+├── tools/                           # Internal deployment helpers
+└── tests/                           # Test scaffold
 ```
 
-The command states that SSO/bundler funding is outside the benchmarked core
-one-ETH policy and checks the sandbox funding wallet for the incremental
-allowance before it starts anything.
+`compose/compose.yaml` is the only Compose entrypoint. It includes separate
+platform, Explorer, permissioning, monitoring, deferred-profile, and demo
+modules. See [components](runbooks/COMPONENTS.md).
 
-For webhooks:
+Reserved implementation directories retain `.gitkeep` placeholders until
+their functionality is introduced. See [the Ansible guide](ansible/README.md)
+for the implemented preflight and planned host-automation boundary.
 
-```bash
-tools/sandbox edit-secrets
-# Set WEBHOOK_ENABLED=true, save, and exit the editor.
-tools/sandbox decrypt
-tools/sandbox enable webhook
-```
+Configuration references:
 
-The SSO and webhook permission jobs are independent and idempotent. Disabling
-either profile does not remove its persistent data.
+- `deployment/sandbox.env.example` documents settings.
+- `deployment/funding-targets.json` contains only the six evaluation funding
+  targets.
+- `deployment/versions.lock.yaml` records component versions, source commits,
+  and immutable image digests.
+- `deployment/public/*.example.*` documents public generated artifacts.
+- `tools/validate-stack` validates the complete Compose model rooted at
+  `compose/compose.yaml`.
 
-## Optional institutional demo
-
-The demo uses SSO. Add the `demo` DNS record and enable it after the core stack
-and SSO configuration are healthy:
-
-```bash
-tools/sandbox enable demo
-```
-
-The profile creates its own Keycloak realm, two SOPS-managed users, a dedicated funded deployer, and persistent contract output. It does not add demo users to the core realm.
-Its incremental funding is also outside the benchmarked core one-ETH policy
-and is checked before the profile starts.
-
-## Release benchmark gate
-
-The one-ETH claim is a release contract, not an estimate. Funding, readiness,
-and deployment refuse to proceed while
-`deployment/funding-policy.json` has `benchmark.status: pending`. Before
-customer release, complete one clean Sepolia rehearsal using
-[the benchmark procedure](docs/FUNDING_BENCHMARK.md), record the evidence, and
-independently review the resulting targets. Provisional values must not be
-presented as measured values.
-
-The [Enterprise Adoption Guide Gate
-0](docs/enterprise-adoption/02-deployment-readiness-and-security.md#gate-0-matter-labs-release-readiness)
-lists additional platform-version, generated-report, runtime-ownership,
-bridge-timeout, and failure-guidance blockers that must also be closed before
-customer handoff.
-
-For restarts, upgrades, backups, certificate troubleshooting, and secret
-recovery, use the [operations runbook](docs/RUNBOOK.md).
+Airbender remains version-selected but deferred; no prover service is started.
