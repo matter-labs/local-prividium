@@ -1,7 +1,17 @@
 # Deploy the Prividium Sepolia sandbox
 
-This guide takes an enterprise engineer from an empty amd64 VPS to a working,
-customer-hosted Prividium evaluation environment.
+This technical companion takes an enterprise engineer from a prepared amd64
+VPS containing the approved release checkout to a working, customer-hosted
+Prividium evaluation environment.
+
+> [!IMPORTANT]
+> Start with the [Enterprise Adoption
+> Guide](enterprise-adoption/README.md). Its [core deployment
+> playbook](enterprise-adoption/03-core-deployment-playbook.md) is the canonical
+> customer procedure. The checked-in funding policy currently has a pending
+> release benchmark, so the normal customer workflow is intentionally blocked
+> until Matter Labs completes and independently reviews the exact-release
+> Sepolia rehearsal.
 
 At the end you will have:
 
@@ -17,15 +27,17 @@ custody design, production network, or officially supported public testnet.
 
 ## Time and irreversible actions
 
-Plan for **2–4 hours elapsed time** after the prerequisites are available.
+Use **2–4 hours elapsed time** as the initial execution-planning target after
+the prerequisites are available. It is not an SLA; replace it with measured
+rehearsal and customer-deployment data.
 
-| Stage | Typical operator time | External wait | Reversible? |
+| Stage | Typical operator time | External wait | On-chain write? |
 | --- | ---: | ---: | --- |
-| Host, DNS, registry, and RPC | 20–40 min | DNS/provider dependent | Yes |
-| Identity and funding review | 15–25 min | Sepolia ETH acquisition/confirmation | Yes |
-| Prepare and review the chain | 20–45 min | Image/source build dependent | Yes |
-| Broadcast the ecosystem | 10–30 min | Sepolia inclusion dependent | **No** |
-| Start and validate the stack | 20–45 min | DNS/ACME and service startup | Yes |
+| Host, DNS, registry, and RPC | 20–40 min | DNS/provider dependent | No |
+| Identity and funding review/distribution | 15–25 min | Sepolia ETH acquisition/confirmation | **Yes — funding transfers** |
+| Prepare and review the chain | 20–45 min | Image/source build dependent | No |
+| Broadcast the ecosystem | 10–30 min | Sepolia inclusion dependent | **Yes — highest-risk gate** |
+| Start and validate the stack | 20–45 min | DNS/ACME and service startup | **Yes — Watchdog bridge deposit** |
 
 The main schedule risks are Sepolia ETH availability, insufficient RPC
 capabilities, private registry access, DNS/ACME propagation, and a partially
@@ -36,8 +48,9 @@ completed irreversible broadcast. Resolve the first four before broadcasting.
 Use an x86-64 Linux VPS with Docker Engine, Docker Compose v2, and recommended
 capacity of 8 vCPU, 16 GB RAM, and 200 GB SSD.
 
-Allow inbound SSH, TCP 80/443, and UDP 443. Point these required `A` records to
-the VPS:
+Allow inbound SSH and TCP 80/443. Compose also publishes UDP 443 for optional
+HTTP/3; allow it only when consistent with customer policy. Point these
+required `A` records to the VPS:
 
 | Name | Public interface |
 | --- | --- |
@@ -64,8 +77,10 @@ Run the environment check:
 tools/sandbox doctor
 ```
 
-Continue when required tools, Docker access, host architecture, and registry
-prerequisites have no blocking result.
+Continue when required tools and Docker access have no blocking result.
+Separately confirm the host is amd64, the private registry is accessible, the
+DNS records point to this VPS, the browser RPC works with CORS, and the cold
+build egress described in the Enterprise Adoption Guide is permitted.
 
 ## 1. Generate identities
 
@@ -121,7 +136,7 @@ wallet is clearly marked as the **only customer-funded address**. Do not send
 ETH directly to the deployer, governor, owner, or operator addresses.
 
 The optional SSO/bundler and institutional-demo identities are dormant and
-outside the core one-ETH guarantee.
+outside the benchmarked core one-ETH policy.
 
 After review, commit `deployment/public/roles.md` as the first customer-specific
 deployment record.
@@ -141,8 +156,11 @@ Completion message:
 Decrypted runtime environment written to /etc/prividium/runtime/sandbox.env with mode 0600
 ```
 
-Private keys, passwords, and private provider URLs remain in the encrypted or
-mode-`0600` environment. They never appear in generated reports.
+Private keys, passwords, and private provider URLs remain in the encrypted
+environment or protected runtime files. Chain preparation also writes
+mode-`0600` plaintext wallet/configuration artifacts under
+`/etc/prividium/runtime/chain`; they must remain operator-restricted and never
+appear in public generated reports.
 
 ## 4. Send 1 Sepolia ETH to one address
 
@@ -164,17 +182,19 @@ current shortfalls, retained reserve, maximum transfer amount, and a
 deterministic plan ID. If the sponsor is empty, the command returns nonzero
 after still writing the report.
 
-Send exactly **1 Sepolia ETH** to the sandbox funding wallet shown under
-“Customer action.” Wait for confirmation, then rerun:
+After the release funding benchmark is complete, send exactly **1 Sepolia
+ETH** to the sandbox funding wallet shown under “Customer action.” Wait for
+confirmation, then rerun:
 
 ```bash
 tools/sandbox funding
 ```
 
-Continue when the report status is `READY`. The guarantee covers the default
-core sandbox, a 14-day/2,016-batch operator runway, Watchdog’s 0.05 L2 ETH
-target, transaction costs, reserve, and buffer. It does not cover SSO/bundler
-or the institutional demo.
+Continue when the report status is `READY`. Once the exact-release benchmark
+is complete, the approved policy is intended to cover the default core
+sandbox, a 14-day/2,016-batch operator target, Watchdog’s 0.05 L2 ETH target,
+transaction costs, reserve, and buffer. Actual runway varies with Sepolia gas
+conditions. The policy does not cover SSO/bundler or the institutional demo.
 
 ## 5. Review and apply the funding plan
 
@@ -226,6 +246,29 @@ ecosystem/chain bootstrap without submitting transactions. Review:
 The preparation record cryptographically binds the dry-run manifest to its
 chain ID and locked source commits.
 
+As the designated operator, confirm that
+`/etc/prividium/runtime/chain/out/manifest.json` and
+`/etc/prividium/runtime/chain/out/preparation.json` are readable without
+`sudo`. Stop if either is not. Do not broaden their file modes or apply an ad
+hoc recursive ownership change; customer release requires a rehearsed
+rootful-Docker ownership model.
+
+Preparation builds only the chain-bootstrap artifact. Before broadcast, pull
+and build the complete default stack without starting it:
+
+```bash
+docker compose \
+  --env-file /etc/prividium/runtime/sandbox.env \
+  pull --ignore-buildable
+
+docker compose \
+  --env-file /etc/prividium/runtime/sandbox.env \
+  build
+```
+
+Both commands must succeed. This exercises core image, source, and package
+egress before chain creation.
+
 ## 7. Review readiness and broadcast
 
 Generate the pre-broadcast record:
@@ -239,6 +282,10 @@ It writes `/etc/prividium/runtime/reports/readiness.md` and returns one result:
 - `READY` — all blocking checks pass;
 - `READY WITH WARNINGS` — all blocking checks pass, but DNS is unresolved;
 - `BLOCKED` — do not broadcast.
+
+The customer procedure requires `READY` by default. Proceed with
+`READY WITH WARNINGS` only through a documented joint exception; DNS must be
+correct before final acceptance.
 
 Blocking checks cover protected configuration permissions, role identity,
 Sepolia RPC capabilities, the release-benchmarked funding policy, confirmed
@@ -278,7 +325,10 @@ tools/sandbox deploy
 ```
 
 The command renders browser configuration, validates Compose, builds maintained
-images, starts the core stack, and waits up to ten minutes for:
+images, and starts the core stack. The Watchdog bridge prerequisite currently
+has no execution deadline; the customer-release Gate 0 requires a reviewed
+timeout and ambiguous-transaction procedure. After startup prerequisites
+complete, the deployment summary waits up to ten minutes for:
 
 - all core long-running services to run and all one-shot jobs to complete;
 - HTTPS for user, administration, API, Explorer, and Explorer API;
@@ -300,11 +350,26 @@ If checks fail, deploy returns nonzero and writes:
 ```
 
 It never overwrites an earlier successful public summary. Inspect
-`tools/sandbox status` and `tools/sandbox logs`, fix the cause, then run:
+`tools/sandbox logs` and all container states:
+
+```bash
+docker compose \
+  --env-file /etc/prividium/runtime/sandbox.env \
+  --profile "*" \
+  ps --all --no-trunc
+```
+
+If the services and one-shot jobs are already in their expected state and only
+endpoint readiness failed, fix the external condition, then run:
 
 ```bash
 tools/sandbox summary
 ```
+
+If a container is missing/stopped or a one-shot job failed, fix the cause and
+rerun `tools/sandbox deploy`. If `bridge-funds` may have submitted a deposit
+before it failed, inspect its logs and transaction state before rerunning
+anything.
 
 ## 9. Complete the human acceptance checks
 
@@ -313,7 +378,8 @@ Automated startup is necessary but not the full product evaluation. Confirm:
 - the administrator changes the temporary password, logs in, and registers
   WebAuthn with user verification;
 - unauthenticated RPC is denied and authenticated transaction submission works;
-- a user-funded Sepolia deposit and withdrawal complete;
+- a user-funded Sepolia deposit completes and withdrawal initiation/settlement
+  progression meets the Enterprise Adoption Guide acceptance definition;
 - Explorer indexes the authenticated transaction;
 - Watchdog’s RPC, SIWE/auth, 1-wei transfer, and settlement flows remain healthy
   across at least two batches;
@@ -323,23 +389,11 @@ Automated startup is necessary but not the full product evaluation. Confirm:
 
 ## Optional capabilities
 
-Add `auth` and `auth-api` DNS records before SSO, and `demo` before the
-institutional demo.
-
-```bash
-tools/sandbox edit-secrets
-# Set BUNDLER_ENABLED=true and/or WEBHOOK_ENABLED=true.
-tools/sandbox decrypt
-
-tools/sandbox enable sso
-tools/sandbox enable webhook
-tools/sandbox enable demo
-```
-
-SSO/bundler and demo commands explicitly state that they are outside the core
-1 ETH guarantee and run an incremental sandbox-funding-wallet preflight.
-Webhook has no service-wallet funding requirement. All setup jobs remain
-idempotent.
+Optional SSO/bundler, webhook, and institutional-demo capabilities are outside
+the current Enterprise Adoption Guide milestone. Enable them only under a
+separately approved evaluation scope after the core environment has passed
+acceptance. They add DNS, funding, contracts, state, dependencies, and
+acceptance work that are not covered by this procedure.
 
 For restarts, upgrades, backups, certificates, provider changes, SOPS recovery,
 and incident handling, use the [operations runbook](RUNBOOK.md).

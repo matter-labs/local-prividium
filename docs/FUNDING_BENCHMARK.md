@@ -1,5 +1,13 @@
 # Core funding policy release benchmark
 
+> [!WARNING]
+> The current operator workflow blocks funding, readiness, and broadcast while
+> `benchmark.status` is `pending`, and it does not yet expose an approved
+> transaction-capable rehearsal mode. Matter Labs must implement and review
+> that engineering-only path before following this procedure. The
+> `tools/validate-stack --allow-unbenchmarked` option validates structure only;
+> it does not authorize funding or Sepolia transactions.
+
 The repository must not advertise the one-ETH core funding guarantee until the
 funding policy is calibrated against the exact locked release. The default
 policy intentionally has `benchmark.status: pending`; funding, readiness, and

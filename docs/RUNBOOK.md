@@ -4,10 +4,19 @@ This runbook covers an already deployed sandbox. For first-time deployment, use 
 
 ## Routine checks
 
-Show current state:
+Show currently running state:
 
 ```bash
 tools/sandbox status
+```
+
+Include completed/stopped one-shot containers and full exit details:
+
+```bash
+docker compose \
+  --env-file /etc/prividium/runtime/sandbox.env \
+  --profile "*" \
+  ps --all --no-trunc
 ```
 
 Follow the default startup path:
@@ -34,19 +43,31 @@ Monitor operator balances in Grafana/Prometheus. The default alert fires after a
 
 ## Restart
 
-Restart containers without recreating one-shot initialization jobs:
+Restart only the 15 long-running services:
 
 ```bash
 docker compose \
   --env-file /etc/prividium/runtime/sandbox.env \
-  restart
+  restart --no-deps \
+  zksyncos postgres keycloak prividium-api user-panel admin-panel caddy \
+  block-explorer-api block-explorer-app block-explorer-worker \
+  block-explorer-data-fetcher watchdog prometheus grafana \
+  operator-balance-exporter
 ```
 
-If configuration or images changed, rerun the idempotent deployment:
+Keep `--no-deps` and the explicit service list. A bare `docker compose restart`
+can start completed one-shot containers again, including the Watchdog
+bridge-funding job.
+
+If configuration or images changed, rerun the normally convergent deployment:
 
 ```bash
 tools/sandbox deploy
 ```
+
+If an earlier run may have submitted a Watchdog bridge deposit before
+`bridge-funds` failed, inspect its logs and transaction state before rerunning
+deployment.
 
 For an optional capability:
 
@@ -77,11 +98,18 @@ role accounts directly.
 
 Do not rotate commit, prove, or execute keys by editing the environment alone. Update the on-chain role first, then update SOPS, decrypt, and restart ZKsync OS.
 
-Optional SSO/bundler and demo deposits are outside the core 1 ETH guarantee.
-Their enable commands perform a conservative incremental sponsor preflight
-before starting the idempotent bridge jobs.
+Optional SSO/bundler and demo deposits are outside the benchmarked core
+one-ETH policy. Their enable commands perform a conservative incremental
+sponsor preflight before starting the bridge jobs. A bridge job is
+balance-convergent after its prior transaction is confirmed; if a transaction
+may still be in flight, inspect its nonce, receipt, logs, and balances before
+retrying.
 
 ## Edit or rotate secrets
+
+The edit/decrypt/deploy sequence is sufficient only for settings read at
+container restart that do not require a corresponding database, identity,
+on-chain, DNS, or release-state change.
 
 Open the encrypted environment:
 
@@ -101,7 +129,11 @@ Then recreate affected services:
 tools/sandbox deploy
 ```
 
-Database password rotation also requires changing the PostgreSQL role inside the existing database. Editing only the environment will break connectivity.
+Domain/OIDC changes, database passwords, signing keys/on-chain roles, chain
+identity, and release upgrades require separately reviewed procedures. For
+example, database password rotation also requires changing the PostgreSQL role
+inside the existing database, and domain changes require updates to the
+existing Keycloak realm. Editing only the environment will break connectivity.
 
 ## Upgrade
 
@@ -196,7 +228,10 @@ The core realm import runs only against a new Keycloak database. Apply later ide
 
 ## Initialization failures
 
-Permission, funding, EntryPoint, SSO, webhook, and demo jobs are idempotent.
+Permission seeding and contract setup jobs are designed to be idempotent.
+Funding and bridge jobs are balance-convergent only after any prior transaction
+is confirmed. If their transaction state is ambiguous, inspect the nonce,
+receipt, logs, and balances before retrying.
 
 1. Read the failed job:
 
