@@ -1,13 +1,6 @@
 ---
-# Public, non-secret host intent.
+# Public, non-secret host configuration.
 prividium_operator_user: ""
-prividium_operator_public_key: ""
-prividium_ssh_port: 22
-prividium_ssh_allowed_cidrs: []
-prividium_unrestricted_ssh_acknowledged: false
-prividium_ipv6_policy: configured
-prividium_provider_recovery_confirmed: false
-prividium_enable_http3: true
 prividium_runtime_dir: /etc/prividium/runtime
 
 # Supported evaluation-host contract.
@@ -21,8 +14,9 @@ host_preflight_recommended_vcpus: 8
 # Allow for memory reserved by the hypervisor/kernel on nominal VPS sizes.
 host_preflight_minimum_memory_mb: 7680
 host_preflight_recommended_memory_mb: 15360
-# Cloud disk plans are commonly advertised using decimal GB.
-host_preflight_minimum_root_disk_bytes: 200000000000
+# Accept the usable root filesystem on a nominal 200 GB VPS after normal
+# partition and filesystem overhead.
+host_preflight_minimum_root_disk_bytes: 190000000000
 host_preflight_reserved_ports:
   - 80
   - 443
@@ -33,6 +27,13 @@ host_preflight_conflicting_services:
   - rke2-agent.service
   - rke2-server.service
   - snap.microk8s.daemon-kubelite.service
+host_preflight_conflicting_packages:
+  - containerd
+  - docker.io
+  - docker-compose
+  - docker-compose-v2
+  - podman-docker
+  - runc
 host_preflight_time_services:
   - chrony.service
   - chronyd.service
@@ -55,8 +56,9 @@ host_preflight_outbound_endpoints:
       - 200
       - 401
 
-# Reserved for a future idempotent install playbook. The public preflight keeps
-# these false so a previously used application host is rejected.
+# The public preflight keeps these false so a previously used application host
+# is rejected. Installation selectively permits its own managed runtime on a
+# repeat apply.
 host_preflight_allow_existing_runtime: false
 host_preflight_allow_existing_containers: false
 host_preflight_allow_reserved_listeners: false

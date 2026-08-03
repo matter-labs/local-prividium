@@ -10,11 +10,17 @@ dedicated ZKsync ecosystem on Ethereum Sepolia.
 
 ## Evaluation workflow
 
-The CLI is the only customer-facing deployment interface. From a trusted
-Ansible controller, assess the dedicated VPS first:
+The CLI is the only customer-facing deployment interface. From a clean
+repository checkout on the dedicated VPS, bootstrap the pinned local Ansible
+controller and assess the host:
 
 ```bash
-./cli/prividium host preflight --inventory ansible/inventory/hosts.ini
+./cli/prividium host bootstrap
+./cli/prividium host preflight
+./cli/prividium host install --check
+./cli/prividium host install
+# Reconnect so Docker group membership applies.
+./cli/prividium host verify
 ```
 
 Then run the application workflow on the VPS:
@@ -30,6 +36,14 @@ Then run the application workflow on the VPS:
 
 The stages are deliberately explicit:
 
+- `host bootstrap` creates the pinned local Ansible controller and one-host
+  local inventory.
+- `host preflight` performs a read-only compatibility and dedicated-host
+  assessment.
+- `host install` safely upgrades Ubuntu packages and installs the baseline
+  tools, Docker, services, and protected directories after revalidating the
+  host.
+- `host verify` checks the complete Ansible-managed installation surface.
 - `init` creates the encrypted configuration, age identity, evaluation users,
   generated identities, and public role inventory.
 - `fund` reconciles the three deployment and three settlement-operator
@@ -68,20 +82,26 @@ not yet have public activation commands.
 
 ## Prerequisites
 
-- A dedicated Ubuntu Server 24.04 LTS / amd64 VPS with Docker Engine and
-  Docker Compose v2.
+- A dedicated, initially blank Ubuntu Server 24.04 LTS / amd64 VPS.
+- Git, Python 3.12 or newer, `python3-apt`, and `venv` support for the initial
+  clone and bootstrapped host controller.
 - Minimum CPU capacity: 4 vCPU.
 - Minimum memory capacity: 8 GB RAM.
-- Recommended capacity: 8 vCPU, 16 GB RAM, and 200 GB SSD.
+- Minimum root-disk capacity: 200 GB SSD.
+- Recommended compute capacity: 8 vCPU and 16 GB RAM.
 - Customer-approved SSH access, inbound TCP 80 and 443, and inbound UDP 443.
 - `A` records for `app`, `admin`, `api`, `explorer`, `explorer-api`, and `idp`
   under the selected sandbox domain.
 - A private Sepolia RPC with historical calls/logs, receipts, and blob-fee
   support.
 - A separate public, CORS-enabled Sepolia RPC for browser use.
-- `age`, `age-keygen`, `sops`, `cast`, `jq`, `openssl`, and `curl`.
 - Access to the pinned private Prividium images on Quay.
 - Sepolia ETH for the six protocol identities.
+
+The host installer supplies Docker Engine, Compose, `age`, SOPS, Foundry,
+`jq`, OpenSSL, and the remaining managed host packages. Provider firewall
+rules, DNS, Quay authentication, RPC access, and Sepolia funding remain
+customer-controlled. Host firewall automation is deferred.
 
 ## Public interfaces
 
@@ -121,7 +141,7 @@ The repository is organized by deployment interface and operational concern:
 ├── README.md
 ├── schemas/                         # Reserved for deployment schemas
 ├── cli/                             # Customer-facing deployment CLI
-├── ansible/                         # Read-only host preflight and role scaffolds
+├── ansible/                         # Host preflight, installation, and verification
 ├── compose/                         # Compose entrypoint and service modules
 ├── releases/                        # Reserved for release manifests
 ├── runbooks/                        # Setup, component, and evaluation guides
@@ -130,7 +150,7 @@ The repository is organized by deployment interface and operational concern:
 ├── deployment/                      # Sandbox configuration and public output
 ├── dev/                             # Container build and runtime assets
 ├── tools/                           # Internal deployment helpers
-└── tests/                           # Test scaffold
+└── tests/                           # Deployment UX validation
 ```
 
 `compose/compose.yaml` is the only Compose entrypoint. It includes separate
@@ -139,7 +159,7 @@ modules. See [components](runbooks/COMPONENTS.md).
 
 Reserved implementation directories retain `.gitkeep` placeholders until
 their functionality is introduced. See [the Ansible guide](ansible/README.md)
-for the implemented preflight and planned host-automation boundary.
+for the implemented host automation and its explicit security boundary.
 
 Configuration references:
 

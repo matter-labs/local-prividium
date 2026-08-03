@@ -1,0 +1,23 @@
+---
+- name: Refresh the Ubuntu package index
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: "{{ host_packages_cache_valid_time_seconds }}"
+
+- name: Apply safe Ubuntu package upgrades
+  ansible.builtin.apt:
+    upgrade: safe
+  when: host_packages_apply_safe_upgrade | bool
+
+- name: Install the evaluation host packages
+  ansible.builtin.apt:
+    name: "{{ host_packages_required }}"
+    state: present
+
+- name: Report the package plan limitation
+  ansible.builtin.debug:
+    msg: >-
+      Check mode predicts Ubuntu package changes without downloading or
+      installing packages. Service activation is evaluated during apply and
+      by host verification.
+  when: ansible_check_mode

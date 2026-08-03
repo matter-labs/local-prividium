@@ -1,23 +1,25 @@
 # Prividium evaluation host automation
 
 This directory contains the minimal Ansible layer for one customer-controlled
-Prividium evaluation VPS. The implemented surface is currently limited to a
-read-only host preflight.
+Prividium evaluation VPS. It implements read-only compatibility preflight,
+reviewable host installation, and read-only installation verification.
 
 The authoritative requirements are in the
 [evaluation VPS host contract](../runbooks/HOST_CONTRACT.md).
 
 > [!IMPORTANT]
-> `preflight.yml` gathers evidence and enforces the supported host boundary,
-> but does not remediate failures. Host installation, SSH/firewall changes,
-> Docker installation, and post-install verification remain deferred.
+> `install.yml` provisions the package, tool, Docker, service, and protected
+> directory baseline. It does not alter SSH or activate firewall rules.
+> Firewall activation remains deferred until it has a timed rollback and
+> second-session verification workflow.
 
 ## Automation boundary
 
 Ansible owns host readiness only:
 
 - host facts and prerequisites;
-- safe SSH and firewall configuration;
+- Ubuntu packages, security updates, and time synchronization;
+- pinned host deployment tools;
 - Docker Engine and Compose;
 - protected directories;
 - host-level verification.
@@ -45,66 +47,85 @@ The Ansible controller may be:
 The Prividium CLI itself runs on the VPS because it owns the local Docker
 Engine and `/etc/prividium/runtime`.
 
-The implemented public command is:
+The implemented public commands are:
 
 ```text
-./cli/prividium host preflight --inventory ansible/inventory/hosts.ini
+./cli/prividium host bootstrap
+./cli/prividium host preflight
+./cli/prividium host install --check
+./cli/prividium host install
+./cli/prividium host verify
 ```
 
-The wrapper displays the exact configured host, address, SSH user, and SSH
-port before invoking Ansible in check mode. It rejects the documentation
-inventory and inventories whose `prividium` group does not contain exactly one
-host. SSH host-key checking remains enabled.
+`host bootstrap` creates `ansible/.venv` from the pinned runtime requirements,
+detects the current user, and writes Gitignored `hosts.ini` and
+`group_vars/all.yml` files for a one-host local connection. It does not prompt
+for deferred firewall inputs, install system packages, or change host
+configuration.
 
-## Run the read-only preflight
+`host preflight` automatically uses that environment and inventory. The
+wrapper displays the exact configured host, connection, user, and declared SSH
+port for remote inventories before invoking Ansible in check mode. An explicit
+`--inventory` remains available for advanced remote-controller use. SSH
+host-key checking remains enabled for SSH inventories.
 
-From a trusted controller with Python 3.12 or newer:
+`host install --check` renders the constrained installation plan in Ansible
+check and diff modes. `host install` displays the same target and managed
+boundary, then requires an interactive `INSTALL` confirmation. Agent-driven
+non-interactive apply additionally requires `--yes`.
+
+`host verify` checks only the Ansible-managed installation surface and always
+runs in check mode. It reports reboot status and keeps provider-firewall
+configuration and Quay login as explicit follow-up actions.
+
+## Run the host workflow
+
+From the repository checkout on the VPS with Python 3.12 or newer,
+`python3-apt`, and `venv` support:
 
 ```bash
-python3 -m venv ansible/.venv
-ansible/.venv/bin/python -m pip install -r ansible/requirements.txt
-cp ansible/inventory/example.ini ansible/inventory/hosts.ini
-cp \
-  ansible/inventory/group_vars/all.example.yml \
-  ansible/inventory/group_vars/all.yml
+./cli/prividium host bootstrap
+./cli/prividium host preflight
+./cli/prividium host install --check
+./cli/prividium host install
+# Reconnect so Docker group membership applies.
+./cli/prividium host verify
 ```
 
-Edit both copied files. Confirm the VPS host key through the provider console
-or another trusted channel before connecting, then run:
+Bootstrap is non-interactive and derives only the current operator. SSH keys,
+administrative CIDRs, provider recovery, and IPv6 firewall intent remain
+customer-controlled network concerns. The generated inventory and variables
+are Gitignored; never put Quay credentials or application secrets in them.
 
-```bash
-PATH="${PWD}/ansible/.venv/bin:${PATH}" \
-  ./cli/prividium host preflight \
-    --inventory ansible/inventory/hosts.ini
-```
-
-The copied inventory and variables are Gitignored. They contain only public
-host intent; never put Quay credentials or application secrets in them.
-
-## Planned repository shape
+## Repository shape
 
 ```text
 ansible/
 ├── README.md
 ├── ansible.cfg
 ├── requirements.txt
+├── requirements-dev.txt
 ├── inventory/
 │   ├── example.ini
 │   └── group_vars/
 │       └── all.example.yml
 ├── playbooks/
-│   └── preflight.yml
+│   ├── preflight.yml
+│   ├── install.yml
+│   └── verify.yml
 └── roles/
     ├── host_preflight/             # Implemented, read-only
-    ├── host_security/
-    ├── container_runtime/
-    ├── prividium_config/
-    └── verification/
+    ├── host_packages/              # Ubuntu packages and safe upgrades
+    ├── host_security/              # Time and unattended-upgrade policy
+    ├── prividium_tools/            # Pinned SOPS and Foundry
+    ├── container_runtime/          # Docker Engine and Compose
+    ├── prividium_config/           # Protected directories
+    └── verification/               # Read-only installation assertions
 ```
 
 The existing `observability`, `backups`, and `prividium_services` role
-directories remain reserved and are outside the first implementation.
-`upgrade.yml` and `uninstall.yml` are also deferred.
+directories remain reserved. Firewall activation, `upgrade.yml`, and
+`uninstall.yml` are deferred.
 
 ## Playbooks
 
@@ -115,20 +136,18 @@ asserts:
 
 - Ubuntu release and `amd64` architecture;
 - CPU, memory, disk, systemd, and time synchronization;
-- sudo, SSH, IPv4, IPv6, and provider-recovery inputs;
-- presence of the declared operator key in the connected user's
-  `authorized_keys`;
-- current firewall backend and effective rules;
+- current operator and passwordless sudo;
+- current IPv6 and firewall state as evidence;
 - Docker state and conflicting container runtimes;
 - existing listeners and conflicting services;
 - required outbound connectivity;
 - dedicated-host assumptions.
 
 Preflight may report warnings, but unsupported OS, inadequate resources,
-missing recovery access, unsafe SSH inputs, conflicting public listeners, or
-an already-used application host are blockers.
+conflicting runtime packages, public listeners, or an already-used application
+host are blockers.
 
-Docker, UFW, baseline packages, and active time synchronization are reported as
+Docker, baseline packages, and active time synchronization are reported as
 installable gaps rather than host-compatibility failures. No registry
 credential is used: the Quay check is an unauthenticated request to `/v2/`,
 where HTTP `401` is an expected proof of reachability.
@@ -138,14 +157,17 @@ where HTTP `401` is an expected proof of reachability.
 Mutating and limited to one host with `serial: 1` and
 `any_errors_fatal: true`. The role order is:
 
-1. `host_preflight`
+1. `host_packages`
 2. `host_security`
-3. `container_runtime`
-4. `prividium_config`
+3. `prividium_tools`
+4. `container_runtime`
+5. `prividium_config`
 
-The playbook must use idempotent modules, handlers, and explicit file modes.
-Shell or command tasks require a documented reason, correct `changed_when`,
-check-mode behavior, and a deterministic guard.
+The playbook uses idempotent modules, handlers, explicit file modes, pinned
+third-party checksums, safe package upgrades, and an explicit check-mode path.
+It reruns `host_preflight` immediately before mutation and records a
+root-owned marker so a second apply can safely accept the managed runtime
+directory.
 
 SSH hardening is a separate, explicitly confirmed stage after replacement
 access has been verified. It is not a default side effect of Docker
@@ -155,17 +177,19 @@ installation.
 
 Read-only and expected to report no changes. It verifies:
 
-- approved listeners and firewall rules for IPv4 and IPv6;
+- baseline Ubuntu and Docker packages;
+- pinned SOPS and Foundry versions;
 - Docker daemon and Compose availability;
-- no unexpected Docker port publications;
+- bounded Docker log configuration and service enablement;
+- operator Docker group membership;
 - runtime directory ownership and modes;
-- unattended security updates and system time;
-- reboot persistence;
-- the static Compose model;
-- external reachability when an external probe target is provided.
+- Chrony service state; and
+- reboot status as explicit follow-up evidence.
 
-Application health remains the responsibility of
-`./cli/prividium preflight` and `./cli/prividium deploy`.
+Provider-firewall acceptance and external exposure remain customer workflow
+responsibilities. Host firewall automation is deferred. Application health
+remains the responsibility of `./cli/prividium preflight` and
+`./cli/prividium deploy`.
 
 ## Role boundaries
 
@@ -176,21 +200,30 @@ never changes the host.
 
 ### `host_security`
 
-Security updates, time synchronization, staged SSH safety, host firewall,
-IPv6 policy, and bounded system logging. Firewall tasks preserve the active
-session and support a timed rollback.
+Unattended security-update policy, automatic-reboot prevention, and Chrony
+time synchronization. It enables Ubuntu's apt metadata and unattended-upgrade
+timers. It does not install, activate, or configure a firewall.
+
+### `host_packages`
+
+Safe Ubuntu upgrades and the evaluation package baseline.
+
+### `prividium_tools`
+
+Checksum-pinned SOPS and Foundry binaries plus Ubuntu-managed `age`. It does
+not create SOPS identities or application secrets.
 
 ### `container_runtime`
 
-Approved Docker installation, Compose plugin, daemon log rotation, service
-enablement, and Docker-aware exposure checks. It does not configure registry
-credentials.
+Approved Docker installation, Compose plugin, merged daemon log rotation,
+service enablement, and explicit operator membership in Docker's
+root-equivalent group. It does not configure registry credentials or firewall
+rules.
 
 ### `prividium_config`
 
-Deployment user and protected `/etc/prividium` directories. It does not clone
-arbitrary branches, decrypt configuration, initialize identities, or run the
-Prividium CLI.
+Protected `/etc/prividium` directories. It does not clone arbitrary branches,
+decrypt configuration, initialize identities, or run the Prividium CLI.
 
 ### `verification`
 
@@ -198,64 +231,58 @@ Assertions and evidence only. It does not remediate failures.
 
 ## Inputs
 
-The initial variable surface should remain small:
+The implemented variable surface is deliberately small:
 
 | Variable | Purpose |
 | --- | --- |
-| `prividium_operator_user` | Existing or intended deployment operator |
-| `prividium_operator_public_key` | Public SSH key, never a private key |
-| `prividium_ssh_port` | Customer-selected SSH port |
-| `prividium_ssh_allowed_cidrs` | Explicit administrative source ranges |
-| `prividium_ipv6_policy` | `configured` or `disabled` |
-| `prividium_provider_recovery_confirmed` | Confirms recovery-console access |
-| `prividium_enable_http3` | Must match UDP 443 Compose publication |
+| `prividium_operator_user` | Existing deployment operator |
 | `prividium_runtime_dir` | Fixed by default to `/etc/prividium/runtime` |
 
-Inventory and group variables contain no secrets. Allowing unrestricted SSH
-requires a separate acknowledgement variable rather than an empty-list
-default.
+Inventory and group variables contain no secrets. Network-security inputs will
+be introduced only with the deferred, rollback-protected firewall milestone.
 
 ## Safety requirements
 
 - `preflight` and `verify` are read-only.
-- `plan` uses Ansible check and diff modes.
+- `host install --check` uses Ansible check and diff modes.
 - Sensitive tasks set `no_log: true` and `diff: false`, although the initial
   host layer should not handle application secrets at all.
 - Every apply shows and confirms the exact target.
-- Firewall rules permit the intended SSH connection before default deny.
-- A second SSH connection is verified before disabling old access.
-- Firewall rollback is scheduled before rules are activated and cancelled
-  only after verification.
-- IPv4 and IPv6 are evaluated separately.
-- Docker exposure is verified independently of host firewall status.
+- SSH and firewall configuration is not an implicit installation side effect.
+- Static Compose exposure and external reachability are validated outside the
+  host installer.
 - The playbooks never submit Sepolia transactions or invoke protocol
   broadcast.
 
 ## Test and release gate
 
-The read-only preflight milestone is not releasable until it passes:
+The host-installation milestone is not releasable until it passes:
 
 - YAML parsing and `ansible-playbook --syntax-check`;
 - `ansible-lint`;
-- check mode on a clean Ubuntu 24.04 LTS VPS;
+- check mode, first apply, second idempotent apply, and verification on a clean
+  Ubuntu 24.04 LTS VPS;
 - existing shell and Compose validation;
 - secret scanning.
 
-Apply idempotence, reboot verification, external probing, and SSH rollback
-testing remain gates for the later mutating host-automation milestone.
+Reboot verification remains a gate for this milestone. External probing and
+SSH/firewall rollback testing remain gates for the later network-security
+milestone.
 
 The disposable-VPS test record must identify the image, provider, IPv4/IPv6
 state, Ansible version, Docker version, and exact Git revision.
 
 ## Implementation order
 
-1. **Complete:** pin Ansible and the controller lint tooling.
+1. **Complete:** pin the Ansible runtime separately from CI lint tooling.
 2. **Complete:** add example inventory and non-secret variables.
-3. **Complete:** implement the read-only host preflight and constrained wrapper.
-4. Implement directory and Docker setup.
+3. **Complete:** implement guided controller bootstrap, read-only host
+   preflight, and constrained wrappers.
+4. **Complete:** implement packages, pinned tools, protected directories, and
+   Docker setup.
 5. Implement firewall changes with rollback.
-6. Implement read-only verification.
-7. Add constrained `plan`, `apply`, and `verify` wrapper commands.
+6. **Complete:** implement read-only installation verification.
+7. **Complete:** add constrained check, apply, and verify wrapper commands.
 8. Exercise the complete flow on a disposable VPS.
 
 No production deployment behavior should be imported into this evaluation

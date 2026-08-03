@@ -1,22 +1,5 @@
 ---
-# Copy to all.yml. This file contains public host intent only; never add Quay
+# Copy to all.yml for an advanced remote-controller inventory. Never add Quay
 # credentials, RPC URLs, age identities, private keys, or generated passwords.
 prividium_operator_user: ubuntu
-prividium_operator_public_key: >-
-  ssh-ed25519 REPLACE_WITH_THE_OPERATOR_PUBLIC_KEY evaluation-operator
-
-prividium_ssh_port: 22
-prividium_ssh_allowed_cidrs:
-  - 203.0.113.10/32
-prividium_unrestricted_ssh_acknowledged: false
-
-# Use configured when IPv6 is enabled and will receive firewall parity. Use
-# disabled only when IPv6 is disabled at both the provider and host boundary.
-prividium_ipv6_policy: configured
-
-# Set true only after confirming that the provider recovery console works.
-prividium_provider_recovery_confirmed: false
-
-# The current Compose model publishes UDP 443 for Caddy HTTP/3.
-prividium_enable_http3: true
 prividium_runtime_dir: /etc/prividium/runtime

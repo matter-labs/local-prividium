@@ -4,46 +4,17 @@
     that:
       - prividium_operator_user is string
       - prividium_operator_user is match('^[a-z_][a-z0-9_-]{0,31}$')
-      - prividium_operator_public_key is string
-      - >-
-        prividium_operator_public_key is
-        match('^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(256|384|521)) [A-Za-z0-9+/=]+(?: .*)?$')
-      - "'REPLACE_' not in prividium_operator_public_key"
-      - prividium_ssh_port | int >= 1
-      - prividium_ssh_port | int <= 65535
-      - prividium_ssh_allowed_cidrs is sequence
-      - prividium_ssh_allowed_cidrs is not string
-      - prividium_ssh_allowed_cidrs | length > 0
-      - >-
-        ('0.0.0.0/0' not in prividium_ssh_allowed_cidrs and
-        '::/0' not in prividium_ssh_allowed_cidrs) or
-        prividium_unrestricted_ssh_acknowledged | bool
-      - prividium_ipv6_policy in ['configured', 'disabled']
-      - prividium_provider_recovery_confirmed | bool
-      - prividium_enable_http3 | bool
+      - prividium_operator_user != 'root'
       - prividium_runtime_dir == '/etc/prividium/runtime'
       - ansible_password is not defined
       - ansible_ssh_pass is not defined
+      - ansible_become_password is not defined
+      - ansible_sudo_pass is not defined
     fail_msg: >-
-      Host intent is incomplete or unsafe. Supply a real operator public key,
-      a valid SSH port, one or more approved CIDRs, confirmed provider recovery
-      access, and an explicit IPv6 policy. Unrestricted SSH requires the
-      separate acknowledgement variable; password-based Ansible connections
-      are not supported.
-    success_msg: Non-secret host intent is complete.
-
-- name: Validate administrative source CIDR syntax
-  ansible.builtin.command:
-    argv:
-      - "{{ ansible_facts.python.executable }}"
-      - -c
-      - >-
-        import ipaddress,json,sys;
-        values=json.loads(sys.argv[1]);
-        [ipaddress.ip_network(value, strict=True) for value in values]
-      - "{{ prividium_ssh_allowed_cidrs | to_json }}"
-  changed_when: false
-  check_mode: false
+      Host configuration is incomplete or unsafe. Supply the current non-root
+      operator and fixed runtime path. Password-based Ansible connections are
+      not supported.
+    success_msg: Non-secret host configuration is complete.
 
 - name: Gather installed package facts
   ansible.builtin.package_facts:
@@ -51,19 +22,6 @@
 
 - name: Gather service facts
   ansible.builtin.service_facts:
-
-- name: Inspect the operator authorized-keys file
-  ansible.builtin.stat:
-    path: "{{ ansible_facts.user_dir }}/.ssh/authorized_keys"
-    follow: false
-  register: host_preflight_authorized_keys_path
-
-- name: Read the operator authorized-keys file
-  ansible.builtin.slurp:
-    path: "{{ ansible_facts.user_dir }}/.ssh/authorized_keys"
-  no_log: true
-  register: host_preflight_authorized_keys
-  when: host_preflight_authorized_keys_path.stat.isreg | default(false)
 
 - name: Inspect the protected runtime path
   ansible.builtin.stat:
@@ -199,21 +157,11 @@
         | map(attribute='key')
         | list
       }}
-    host_preflight_operator_key_present: >-
+    host_preflight_detected_conflicting_packages: >-
       {{
-        (
-          host_preflight_authorized_keys.content
-          | default('')
-          | b64decode
-        ) is search(
-          '(^|\\s)'
-          ~ (
-            prividium_operator_public_key.split()[0:2]
-            | join(' ')
-            | regex_escape
-          )
-          ~ '(\\s|$)'
-        )
+        host_preflight_conflicting_packages
+        | intersect(ansible_facts.packages.keys() | list)
+        | sort
       }}
     host_preflight_missing_packages: >-
       {{
@@ -272,8 +220,13 @@
     msg:
       target: "{{ inventory_hostname }} ({{ ansible_host | default(inventory_hostname) }})"
       connection: >-
-        {{ ansible_user_id }} over SSH port
-        {{ ansible_port | default(22) }}
+        {{
+          'local as ' ~ ansible_user_id
+          if ansible_connection | default('ssh') == 'local'
+          else
+          ansible_user_id ~ ' over SSH port ' ~
+          (ansible_port | default(22) | string)
+        }}
       platform: >-
         {{ ansible_facts.distribution }}
         {{ ansible_facts.distribution_version }}
@@ -283,9 +236,7 @@
         {{ ansible_facts.memtotal_mb }} MiB RAM,
         {{ host_preflight_root_disk_bytes }} root bytes
       ipv4: "{{ ansible_facts.default_ipv4.address | default('not detected') }}"
-      ipv6_policy: >-
-        requested={{ prividium_ipv6_policy }},
-        host_disabled={{ host_preflight_ipv6_disabled }}
+      ipv6: "host_disabled={{ host_preflight_ipv6_disabled }}"
       firewall: >-
         ufw_installed={{ 'ufw' in ansible_facts.packages }},
         ufw_status={{
@@ -308,8 +259,8 @@
         }}
       reserved_listeners: "{{ host_preflight_reserved_listener_lines }}"
       conflicting_services: "{{ host_preflight_detected_conflicting_services }}"
+      conflicting_packages: "{{ host_preflight_detected_conflicting_packages }}"
       runtime_exists: "{{ host_preflight_runtime_path.stat.exists }}"
-      operator_key_present: "{{ host_preflight_operator_key_present }}"
       time_synchronized: >-
         {{
           host_preflight_time_state.stdout
@@ -337,15 +288,9 @@
       - ansible_facts.memtotal_mb | int >= host_preflight_minimum_memory_mb
       - host_preflight_root_disk_bytes | int >= host_preflight_minimum_root_disk_bytes
       - ansible_user_id == prividium_operator_user
-      - ansible_port | default(22) | int == prividium_ssh_port | int
-      - host_preflight_authorized_keys_path.stat.isreg | default(false)
-      - host_preflight_operator_key_present
       - host_preflight_sudo_probe.stdout | trim == '0'
-      - >-
-        (prividium_ipv6_policy == 'disabled' and host_preflight_ipv6_disabled)
-        or
-        (prividium_ipv6_policy == 'configured' and not host_preflight_ipv6_disabled)
       - host_preflight_detected_conflicting_services | length == 0
+      - host_preflight_detected_conflicting_packages | length == 0
       - >-
         host_preflight_allow_existing_runtime
         or not host_preflight_runtime_path.stat.exists
@@ -364,7 +309,7 @@
     fail_msg: >-
       This VPS is outside the supported evaluation boundary. Review the host
       evidence above for the unsupported platform or capacity, connection
-      mismatch, IPv6-policy mismatch, existing runtime/containers, conflicting
+      mismatch, existing runtime/containers, conflicting packages,
       services/listeners, or outbound-connectivity failure. Preflight made no
       host changes.
     success_msg: >-
@@ -394,7 +339,7 @@
 - name: Report installable baseline gaps
   ansible.builtin.debug:
     msg: >-
-      Compatibility passed. A future install milestone still needs to address:
+      Compatibility passed. Host installation can address:
       missing_packages={{ host_preflight_missing_packages }},
       active_time_service={{ host_preflight_active_time_services }},
       time_synchronized={{
@@ -403,16 +348,10 @@
         | trim
         | default('unknown', true)
       }},
-      ufw_active={{
-        (
-          host_preflight_ufw_state.stdout
-          | default('')
-        ) is search('Status: active')
-      }},
       docker_client_present={{ host_preflight_docker_version.rc == 0 }},
       docker_daemon_ready={{
         host_preflight_docker_containers.rc
         | default(-1)
         | int == 0
       }}.
-      No remediation was attempted.
+      This preflight did not attempt remediation.

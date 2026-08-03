@@ -1,13 +1,14 @@
 # Evaluation VPS host contract
 
 This document defines the supported host boundary for the Prividium Sepolia
-sandbox. It is the acceptance contract for the planned host automation and for
-manual customer preparation until that automation is implemented.
+sandbox. It is the acceptance contract for the implemented host automation and
+the customer-controlled network preparation that surrounds it.
 
 > [!IMPORTANT]
-> A read-only Ansible host preflight is implemented. It validates this
-> contract but does not install or change anything; host preparation remains
-> the manual workflow in [SETUP.md](SETUP.md).
+> The Ansible layer implements read-only preflight, reviewable installation,
+> and read-only installation verification. Provider firewall rules and
+> external network verification remain customer actions documented in
+> [SETUP.md](SETUP.md). Host firewall and SSH changes are deferred.
 
 ## Purpose
 
@@ -21,20 +22,21 @@ shared application server, or a host containing production workloads.
 
 ## Supported host
 
-The initial automated path will support exactly:
+The automated path supports exactly:
 
 - Ubuntu Server 24.04 LTS;
 - Linux `amd64`;
 - one VPS with a public IPv4 address;
-- a key-authenticated SSH account with working `sudo`;
+- a non-root, key-authenticated SSH account with passwordless `sudo`;
 - at least 4 vCPU, with 8 vCPU recommended;
 - at least 8 GB RAM, with 16 GB recommended;
-- 200 GB of SSD storage or better;
+- a nominal 200 GB SSD plan or better; preflight accepts at least 190 GB of
+  usable root-filesystem capacity after normal partition overhead;
 - a provider recovery console or equivalent out-of-band access;
 - a conventional systemd installation;
 - Docker Engine with Docker Compose v2.
 
-Other Linux distributions may work with the current manual deployment, but
+Other Linux distributions may work with manual preparation, but
 they are outside the initial host-automation support contract.
 
 The customer is responsible for the VPS account, provider billing, public IP,
@@ -42,8 +44,7 @@ DNS zone, SSH keys, recovery console, and any provider-level firewall.
 
 ## Network contract
 
-The provider firewall and host firewall should implement the same intended
-inbound policy:
+The provider firewall must implement this inbound policy:
 
 | Protocol | Port | Source | Purpose |
 | --- | ---: | --- | --- |
@@ -57,6 +58,10 @@ All other inbound traffic is denied. PostgreSQL, Keycloak administration,
 Prometheus, Grafana, raw ZKsync OS RPC, and container-internal service ports
 must not be reachable from an external network.
 
+A future host-firewall layer should mirror this policy, but it is not part of
+the current evaluation installer. It must not be added as an ad-hoc UFW step
+because Docker manages its own packet-filtering rules.
+
 The current Compose model publishes UDP 443. Removing HTTP/3 in a future
 profile must remove both the Compose publication and the corresponding
 firewall allowance.
@@ -69,7 +74,7 @@ IPv6 must be either:
 An unfiltered public IPv6 address is not an acceptable substitute for an IPv4
 firewall policy.
 
-The initial automation will not implement restrictive outbound filtering.
+The evaluation automation does not implement restrictive outbound filtering.
 The host requires outbound DNS and time synchronization, HTTPS access to
 package and image registries, and HTTPS access to the configured Sepolia RPC
 providers.
@@ -82,7 +87,7 @@ firewall status alone is therefore not proof of the effective exposure.
 Verification must inspect all three layers:
 
 1. provider firewall or security group;
-2. host firewall and listening sockets;
+2. host listening sockets;
 3. rendered Compose publications and Docker packet-filtering behavior.
 
 An external scan from outside the VPS is part of acceptance.
@@ -105,9 +110,9 @@ not receive public DNS records.
 
 ## Access and SSH safety
 
-The initial host automation must not assume that port 22 or a particular Linux
-username is available. SSH port, operator user, authorized key, and allowed
-source CIDRs are explicit inputs.
+The implemented installer runs as the current operator and does not alter SSH.
+The customer-selected SSH port, authorized key, and allowed source CIDRs become
+explicit inputs only when the deferred SSH/firewall milestone is implemented.
 
 SSH changes follow two stages:
 
@@ -181,7 +186,7 @@ of installing the sandbox.
 | --- | --- |
 | VPS, provider firewall, SSH keys, DNS, recovery console | Customer |
 | Pull-only Quay credential issuance and revocation | Matter Labs DevOps |
-| Host validation and baseline configuration | Planned Ansible layer |
+| Host validation, packages, tools, and Docker | Ansible layer |
 | Encrypted configuration, identities, funding, deployment | Prividium CLI |
 | Docker services and persistent volumes | Compose deployment |
 | Evaluation access and eventual cleanup | Customer evaluation team |

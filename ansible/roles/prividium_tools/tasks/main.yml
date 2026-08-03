@@ -1,0 +1,71 @@
+---
+- name: Install the pinned SOPS binary
+  ansible.builtin.get_url:
+    url: >-
+      https://github.com/getsops/sops/releases/download/v{{
+      prividium_tools_sops_version }}/sops-v{{
+      prividium_tools_sops_version }}.linux.amd64
+    dest: /usr/local/bin/sops
+    checksum: "{{ prividium_tools_sops_checksum }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Create the versioned Foundry installation directory
+  ansible.builtin.file:
+    path: >-
+      {{ prividium_tools_install_root }}/foundry-v{{
+      prividium_tools_foundry_version }}
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Download the pinned Foundry archive
+  ansible.builtin.get_url:
+    url: >-
+      https://github.com/foundry-rs/foundry/releases/download/v{{
+      prividium_tools_foundry_version }}/foundry_v{{
+      prividium_tools_foundry_version }}_linux_amd64.tar.gz
+    dest: >-
+      /var/tmp/foundry-v{{ prividium_tools_foundry_version }}-linux-amd64.tar.gz
+    checksum: "{{ prividium_tools_foundry_checksum }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Extract the pinned Foundry toolchain
+  ansible.builtin.unarchive:
+    src: >-
+      /var/tmp/foundry-v{{ prividium_tools_foundry_version }}-linux-amd64.tar.gz
+    dest: >-
+      {{ prividium_tools_install_root }}/foundry-v{{
+      prividium_tools_foundry_version }}
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0755"
+    creates: >-
+      {{ prividium_tools_install_root }}/foundry-v{{
+      prividium_tools_foundry_version }}/cast
+  when: not ansible_check_mode
+
+- name: Publish the pinned Foundry binaries
+  ansible.builtin.file:
+    src: >-
+      {{ prividium_tools_install_root }}/foundry-v{{
+      prividium_tools_foundry_version }}/{{ item }}
+    dest: "/usr/local/bin/{{ item }}"
+    state: link
+    owner: root
+    group: root
+    force: true
+  loop: "{{ prividium_tools_foundry_binaries }}"
+  when: not ansible_check_mode
+
+- name: Report deferred Foundry extraction in check mode
+  ansible.builtin.debug:
+    msg: >-
+      Apply will verify, extract, and publish Foundry v{{
+      prividium_tools_foundry_version }} after downloading its pinned archive.
+  when: ansible_check_mode

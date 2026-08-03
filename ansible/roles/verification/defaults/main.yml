@@ -1,0 +1,20 @@
+---
+verification_required_packages:
+  - age
+  - ca-certificates
+  - chrony
+  - curl
+  - git
+  - gnupg
+  - jq
+  - openssl
+  - python3-apt
+  - python3-debian
+  - unattended-upgrades
+  - containerd.io
+  - docker-buildx-plugin
+  - docker-ce
+  - docker-ce-cli
+  - docker-compose-plugin
+verification_expected_foundry_version: 1.5.1
+verification_expected_sops_version: 3.13.3

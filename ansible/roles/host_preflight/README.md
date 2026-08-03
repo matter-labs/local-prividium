@@ -11,5 +11,9 @@ Prividium application CLI.
 Run it through `ansible/playbooks/preflight.yml`, preferably via:
 
 ```bash
-./cli/prividium host preflight --inventory ansible/inventory/hosts.ini
+./cli/prividium host preflight
 ```
+
+`ansible/playbooks/install.yml` deliberately reuses this role immediately
+before mutation, with the managed-runtime exception enabled only when the
+root-owned host-install marker already exists.

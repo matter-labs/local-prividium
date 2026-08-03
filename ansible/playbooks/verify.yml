@@ -1,0 +1,25 @@
+---
+- name: Validate the Prividium verification inventory boundary
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  tasks:
+    - name: Require exactly one dedicated Prividium host
+      ansible.builtin.assert:
+        that:
+          - groups['all'] | default([]) | length == 1
+          - groups['prividium'] | default([]) | length == 1
+        fail_msg: >-
+          Verification requires an inventory containing exactly one host in
+          the prividium group.
+        success_msg: Inventory contains exactly one Prividium target.
+
+- name: Verify the installed Prividium evaluation host
+  hosts: prividium
+  gather_facts: true
+  become: false
+  serial: 1
+  any_errors_fatal: true
+  roles:
+    - role: verification

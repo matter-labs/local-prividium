@@ -8,45 +8,103 @@ network, custody model, or supported public testnet.
 
 ## Before starting
 
-Use a dedicated Ubuntu Server 24.04 LTS / amd64 VPS with Docker Engine,
-Docker Compose v2, at least 4 vCPU and 8 GB RAM, and recommended capacity of
-8 vCPU, 16 GB RAM, and 200 GB SSD. The
+Use a dedicated, initially blank Ubuntu Server 24.04 LTS / amd64 VPS with at
+least 4 vCPU, 8 GB RAM, and 200 GB SSD. The recommended compute capacity is
+8 vCPU and 16 GB RAM. The
 [evaluation VPS host contract](HOST_CONTRACT.md) defines the supported host,
 network, access, and credential boundary.
 
-> [!IMPORTANT]
-> Host automation currently provides a read-only compatibility preflight only.
-> It does not install packages, Docker, or firewall rules. Prepare the VPS
-> manually after the preflight passes.
+Run the workflow as the VPS's normal passwordless-sudo operator, not as
+`root`.
 
-From a trusted controller, install the pinned Ansible tools and copy the
-Gitignored host-intent examples:
+> [!IMPORTANT]
+> Host automation installs packages, tools, Docker, and protected directories.
+> It does not alter SSH or activate firewall rules. The provider firewall
+> remains a customer action; host firewall automation is deferred until it has
+> a safe rollback workflow.
+
+On a blank VPS, install the bootstrap prerequisites, clone the customer
+repository, and enter the checkout:
 
 ```bash
-python3 -m venv ansible/.venv
-ansible/.venv/bin/python -m pip install -r ansible/requirements.txt
-cp ansible/inventory/example.ini ansible/inventory/hosts.ini
-cp \
-  ansible/inventory/group_vars/all.example.yml \
-  ansible/inventory/group_vars/all.yml
+sudo apt-get update
+sudo apt-get install --yes git python3-apt python3-venv
+git clone '<customer-repository-url>' prividium-evaluation
+cd prividium-evaluation
 ```
 
-Edit both copies, verify the VPS SSH host-key fingerprint through the provider,
-then assess the host:
+Then bootstrap the pinned Ansible runtime and Gitignored local inventory:
 
 ```bash
-PATH="${PWD}/ansible/.venv/bin:${PATH}" \
-  ./cli/prividium host preflight \
-    --inventory ansible/inventory/hosts.ini
+./cli/prividium host bootstrap
+```
+
+Bootstrap requires Python 3.12 or newer with `venv` and `python3-apt` support.
+It detects the current user, creates a local one-host inventory, and installs
+only `ansible-core` into the Gitignored `ansible/.venv`. It does not prompt for
+future firewall inputs or change system packages.
+
+Then assess the host:
+
+```bash
+./cli/prividium host preflight
 ```
 
 The command is read-only and always enables Ansible check mode. A passing
-result confirms host compatibility; its final gap report identifies items that
-still need manual installation or configuration.
+result confirms host compatibility.
 
-Restrict the customer-selected SSH port to approved administrative source
-ranges. Allow inbound TCP 80 and 443 and UDP 443. Point these required records
-at the host:
+Review the host installation plan:
+
+```bash
+./cli/prividium host install --check
+```
+
+Then apply it:
+
+```bash
+./cli/prividium host install
+```
+
+The installer reruns the read-only host preflight immediately before any
+mutation and records a root-owned management marker so an immediate second
+apply is idempotent. It:
+
+- applies safe Ubuntu package upgrades;
+- installs the baseline packages, `age`, pinned SOPS, and pinned Foundry;
+- installs Docker Engine, Buildx, and Compose from Docker's official Ubuntu
+  repository;
+- configures bounded Docker logs and enables Docker;
+- enables Chrony and unattended security updates without automatic reboot;
+- adds the operator to the root-equivalent Docker group; and
+- creates the protected `/etc/prividium/runtime` directory.
+
+Reconnect the SSH session so Docker group membership takes effect, then run:
+
+```bash
+./cli/prividium host verify
+```
+
+If installation reports `reboot_required=true`, reboot through the normal
+provider workflow, reconnect, and rerun verification.
+
+Before application deployment, use the VPS provider console to attach a
+default-deny inbound firewall or security group with these rules:
+
+| Protocol | Port | Source |
+| --- | ---: | --- |
+| TCP | Customer-selected SSH port | Customer-approved administrative CIDRs |
+| TCP | 80 | Any |
+| TCP | 443 | Any |
+| UDP | 443 | Any |
+
+Keep the current SSH session and provider recovery console open while changing
+the SSH rule. Verify a second SSH connection through the restricted rule
+before removing any broader temporary access. Leave outbound access enabled
+for DNS, time synchronization, Ubuntu and Docker repositories, image
+registries, and the configured Sepolia RPC providers.
+
+In the authoritative DNS zone, create these `A` records pointing to the VPS
+public IPv4 address:
 
 | Name | Interface |
 | --- | --- |
@@ -57,13 +115,18 @@ at the host:
 | `explorer-api.<domain>` | Explorer API |
 | `idp.<domain>` | OIDC issuer |
 
-Prepare:
+Use a short TTL such as 300 seconds during setup. Do not create `AAAA` records
+unless public IPv6 and equivalent firewall rules are configured end-to-end.
+When using a DNS proxy such as Cloudflare, begin with DNS-only records. All six
+names must resolve publicly before `./cli/prividium deploy`.
+
+The installer supplies `age`, `age-keygen`, SOPS, Foundry `cast`, `jq`,
+OpenSSL, Docker, and Compose. Prepare:
 
 - a private Sepolia RPC with historical calls/logs, receipts, and blob-fee
   support;
 - a separate public Sepolia RPC that permits browser CORS;
 - registry access to the pinned Prividium images;
-- `age`, `age-keygen`, `sops`, `cast`, `jq`, `openssl`, and `curl`;
 - Sepolia ETH for the generated funding wallet.
 
 Authenticate to the private registry with the pull-only credential supplied by
@@ -164,13 +227,7 @@ Preflight creates no persistent runtime or report and submits no transactions.
 
 ## 4. Prepare
 
-The protected runtime must be owned by the deployment user with mode `0700`:
-
-```bash
-sudo install -d -m 0700 -o "$USER" /etc/prividium/runtime
-```
-
-Then run:
+The host installer created the protected runtime. Run:
 
 ```bash
 ./cli/prividium prepare

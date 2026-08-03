@@ -1,0 +1,50 @@
+---
+- name: Enable periodic package metadata refresh and unattended upgrades
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/21prividium-auto-upgrades
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+
+- name: Disable unattended automatic reboots
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/99prividium-unattended-upgrades
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      Unattended-Upgrade::Automatic-Reboot "{{ host_security_automatic_reboot | bool | lower }}";
+
+- name: Enable synchronized system time
+  ansible.builtin.systemd_service:
+    name: chrony.service
+    enabled: true
+    state: started
+  when: not ansible_check_mode
+
+- name: Enable the unattended-upgrades service
+  ansible.builtin.systemd_service:
+    name: unattended-upgrades.service
+    enabled: true
+    state: started
+  when: not ansible_check_mode
+
+- name: Enable automatic apt maintenance timers
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - apt-daily.timer
+    - apt-daily-upgrade.timer
+  when: not ansible_check_mode
+
+- name: Preserve the deferred firewall boundary
+  ansible.builtin.debug:
+    msg: >-
+      No firewall rules were installed, changed, or activated. Provider
+      firewall configuration remains a customer action; host firewall
+      automation is deferred.

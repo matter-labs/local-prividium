@@ -1,0 +1,13 @@
+---
+prividium_tools_sops_version: 3.13.3
+prividium_tools_sops_checksum: >-
+  sha256:e5bec3346a873ae91d871550f3e698c1aad962aff462a080e40f25fde17fef6b
+prividium_tools_foundry_version: 1.5.1
+prividium_tools_foundry_checksum: >-
+  sha256:73640b01bd9ed29fdb4965085099371f8cf0dbbec3e2086cf54564efc4dcfe88
+prividium_tools_install_root: /opt/prividium/tools
+prividium_tools_foundry_binaries:
+  - anvil
+  - cast
+  - chisel
+  - forge

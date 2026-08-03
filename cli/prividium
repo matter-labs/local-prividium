@@ -35,7 +35,7 @@ Usage:
   ./cli/prividium --help
 
 Commands:
-  host       Assess a dedicated evaluation VPS with read-only Ansible
+  host       Bootstrap, provision, and verify an evaluation VPS
   init       Initialize an evaluation sandbox
   fund       Fund identities required for protocol deployment
   preflight  Check evaluation prerequisites before protocol preparation
@@ -44,7 +44,11 @@ Commands:
   deploy     Start and validate the sandbox services
 
 Evaluation workflow:
-  ./cli/prividium host preflight --inventory ansible/inventory/hosts.ini
+  ./cli/prividium host bootstrap
+  ./cli/prividium host preflight
+  ./cli/prividium host install --check
+  ./cli/prividium host install
+  ./cli/prividium host verify
   ./cli/prividium init
   ./cli/prividium fund
   ./cli/prividium preflight
