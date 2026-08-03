@@ -50,12 +50,19 @@ Engine and `/etc/prividium/runtime`.
 The implemented public commands are:
 
 ```text
+./cli/prividium host operator create  # Only for an initial root-only image
 ./cli/prividium host bootstrap
 ./cli/prividium host preflight
 ./cli/prividium host install --check
 ./cli/prividium host install
 ./cli/prividium host verify
 ```
+
+`host operator create` runs before Ansible and only when a provider image lacks
+a suitable account. It installs one customer-selected SSH public-key source,
+creates or verifies a locked-password operator with passwordless sudo, and
+leaves sshd, existing root access, firewall rules, and Docker groups unchanged.
+A human must verify a second SSH connection before continuing as that operator.
 
 `host bootstrap` creates `ansible/.venv` from the pinned runtime requirements,
 detects the current user, and writes Gitignored `hosts.ini` and

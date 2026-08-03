@@ -111,8 +111,12 @@ not receive public DNS records.
 ## Access and SSH safety
 
 The implemented installer runs as the current operator and does not alter SSH.
-The customer-selected SSH port, authorized key, and allowed source CIDRs become
-explicit inputs only when the deferred SSH/firewall milestone is implemented.
+For an initially root-only image, the separate root-only
+`host operator create` command may install a customer-selected public-key source
+for a locked-password operator. It does not change sshd, disable root access, or
+activate a firewall, and requires a human to verify a second SSH connection
+before continuing. The customer-selected SSH port and allowed source CIDRs
+remain explicit inputs for the deferred SSH/firewall milestone.
 
 SSH changes follow two stages:
 

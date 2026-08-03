@@ -151,7 +151,7 @@ prividium_host_bootstrap() {
   current_user=$(id -un)
   if [[ "$current_user" == "root" ]]; then
     prividium_fail \
-      "host bootstrap must run as a normal passwordless-sudo operator, not root"
+      "host bootstrap must run as a normal passwordless-sudo operator, not root; run './cli/prividium host operator create', verify a second SSH login, then continue as that user"
   fi
   if [[ ! "$current_user" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]; then
     prividium_fail "current user is not a supported Linux username"

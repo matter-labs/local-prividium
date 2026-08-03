@@ -5,6 +5,7 @@ prividium_host_usage() {
 Bootstrap, assess, provision, and verify a dedicated Prividium evaluation VPS.
 
 Usage:
+  ./cli/prividium host operator create [options]
   ./cli/prividium host bootstrap
   ./cli/prividium host preflight [--inventory <path>]
   ./cli/prividium host install [--check] [--yes] [--inventory <path>]
@@ -12,6 +13,7 @@ Usage:
   ./cli/prividium host --help
 
 Commands:
+  operator   Create the non-root operator on a root-only VPS
   bootstrap  Create the pinned Ansible environment and local inventory
   preflight  Run the read-only one-host compatibility assessment
   install    Provision packages, tools, Docker, and protected directories
@@ -498,6 +500,10 @@ prividium_host() {
     bootstrap)
       source "${PRIVIDIUM_REPO_ROOT}/cli/commands/host-bootstrap.sh"
       prividium_host_bootstrap "$@"
+      ;;
+    operator)
+      source "${PRIVIDIUM_REPO_ROOT}/cli/commands/host-operator.sh"
+      prividium_host_operator "$@"
       ;;
     preflight)
       prividium_host_preflight "$@"

@@ -23,6 +23,11 @@ controller and assess the host:
 ./cli/prividium host verify
 ```
 
+Run that workflow as a normal passwordless-sudo operator. If a provider image
+initially exposes only `root`, the setup guide uses the constrained
+`./cli/prividium host operator create` command to create the operator while
+preserving root access until a second SSH login has been verified.
+
 Then run the application workflow on the VPS:
 
 ```bash
@@ -38,6 +43,8 @@ The stages are deliberately explicit:
 
 - `host bootstrap` creates the pinned local Ansible controller and one-host
   local inventory.
+- `host operator create` is a root-only preparatory command for provider images
+  that do not already have a suitable non-root account.
 - `host preflight` performs a read-only compatibility and dedicated-host
   assessment.
 - `host install` safely upgrades Ubuntu packages and installs the baseline

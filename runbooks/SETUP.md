@@ -17,21 +17,75 @@ network, access, and credential boundary.
 Run the workflow as the VPS's normal passwordless-sudo operator, not as
 `root`.
 
+### Root-only VPS images
+
+If the provider initially exposes only `root`, create a dedicated operator
+through the constrained bootstrap command. Run these commands once from the
+root session:
+
+```bash
+apt-get update
+apt-get install --yes git python3
+git clone \
+  https://github.com/matter-labs/local-prividium.git \
+  /root/prividium-operator-bootstrap
+cd /root/prividium-operator-bootstrap
+./cli/prividium host operator create
+```
+
+Interactive use detects `/root/.ssh/authorized_keys`, displays the exact
+managed boundary, and requires typing `CREATE`. If the root login uses another
+access mechanism, supply one public key explicitly with `--public-key` or
+`--public-key-file`. Never supply a private key. Agent-driven execution must
+make both choices explicit:
+
+```bash
+./cli/prividium host operator create \
+  --copy-current-authorized-keys \
+  --yes
+```
+
+Copying the current file preserves any key restrictions exactly. If the
+provider installed a root-specific forced command or other restriction that
+prevents a normal operator login, rerun with the plain public key through
+`--public-key-file` instead. The second-login check below is authoritative.
+
+The command creates or verifies the `prividium` user, locks password login,
+installs `sudo` if necessary, grants passwordless sudo, and installs the
+selected authorized keys. It does not alter sshd, root access, firewall rules,
+or Docker groups.
+
+Keep the root session open and verify a new login from another terminal:
+
+```bash
+ssh 'prividium@<vps-address>'
+sudo -n true
+```
+
+Continue only after both commands succeed. Perform the rest of this guide from
+the new `prividium` session; do not reuse a checkout under `/root`.
+
 > [!IMPORTANT]
 > Host automation installs packages, tools, Docker, and protected directories.
 > It does not alter SSH or activate firewall rules. The provider firewall
 > remains a customer action; host firewall automation is deferred until it has
 > a safe rollback workflow.
 
-On a blank VPS, install the bootstrap prerequisites, clone the customer
-repository, and enter the checkout:
+On a blank VPS, install the bootstrap prerequisites and clone over HTTPS:
 
 ```bash
 sudo apt-get update
 sudo apt-get install --yes git python3-apt python3-venv
-git clone '<customer-repository-url>' prividium-evaluation
+git clone https://github.com/matter-labs/local-prividium.git prividium-evaluation
 cd prividium-evaluation
 ```
+
+The repository is public, so the HTTPS clone needs no GitHub credential. Do
+not use its `git@github.com:...` SSH URL on a blank VPS: SSH clone URLs require
+a GitHub SSH identity even for public repositories. If Matter Labs provides a
+private fork later, use an approved read-only token over HTTPS or a forwarded
+SSH agent. Never copy a workstation private key to the VPS or put a token in a
+clone URL.
 
 Then bootstrap the pinned Ansible runtime and Gitignored local inventory:
 

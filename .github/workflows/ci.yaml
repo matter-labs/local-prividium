@@ -28,6 +28,7 @@ jobs:
             \( -name '*.sh' -o -path 'tools/*' -o -path 'cli/prividium' \) \
             -print0 |
             xargs -0 bash -n
+          ./cli/prividium host operator create --help >/dev/null
           ./cli/prividium host bootstrap --help >/dev/null
           ./cli/prividium host preflight --help >/dev/null
           ./cli/prividium host install --help >/dev/null
@@ -35,6 +36,7 @@ jobs:
 
       - name: Validate host automation
         run: |
+          tests/host-operator.sh
           tests/host-bootstrap.sh
           cd ansible
           ansible-playbook \
