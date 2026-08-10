@@ -1,0 +1,93 @@
+#!/usr/bin/env python3
+"""Validate Prividium's small human-input dotenv file and emit NUL pairs."""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+import re
+import stat
+import sys
+from typing import NoReturn
+
+
+EXPECTED = (
+    "SANDBOX_DOMAIN",
+    "ACME_EMAIL",
+    "SEPOLIA_RPC_URL",
+    "SEPOLIA_BROWSER_RPC_URL",
+)
+ASSIGNMENT = re.compile(r"^[ \t]*([A-Z][A-Z0-9_]*)[ \t]*=[ \t]*(.*?)[ \t]*$")
+
+
+def fail(message: str) -> NoReturn:
+    print(f"Error: {message}", file=sys.stderr)
+    raise SystemExit(1)
+
+
+def parse_value(raw: str, line_number: int) -> str:
+    if not raw:
+        fail(f"line {line_number}: value cannot be empty")
+    if raw[0] in {"'", '"'}:
+        if len(raw) < 2 or raw[-1] != raw[0]:
+            fail(f"line {line_number}: quoted value is not closed")
+        value = raw[1:-1]
+        if raw[0] in value:
+            fail(f"line {line_number}: embedded quote is not supported")
+    else:
+        if "'" in raw or '"' in raw:
+            fail(f"line {line_number}: quotes must wrap the complete value")
+        value = raw
+    if not value:
+        fail(f"line {line_number}: value cannot be empty")
+    if any(character in value for character in ("$", "`", "\\")):
+        fail(f"line {line_number}: shell expansion and escapes are not allowed")
+    if any(ord(character) < 32 or ord(character) == 127 for character in value):
+        fail(f"line {line_number}: control characters are not allowed")
+    return value
+
+
+def main() -> None:
+    if len(sys.argv) != 2:
+        fail("usage: tools/parse-input-env <path>")
+    path = Path(sys.argv[1])
+    try:
+        metadata = path.lstat()
+    except FileNotFoundError:
+        fail(f"input environment does not exist: {path}")
+    if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
+        fail(f"input environment must be a regular file, not a symlink: {path}")
+    mode = stat.S_IMODE(metadata.st_mode)
+    if mode != 0o600:
+        fail(f"input environment must have mode 0600; found {mode:04o}: {path}")
+    if metadata.st_uid != os.geteuid():
+        fail(f"input environment must be owned by the current operator: {path}")
+
+    values: dict[str, str] = {}
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError) as error:
+        fail(f"could not read input environment: {error}")
+    for line_number, line in enumerate(lines, 1):
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        match = ASSIGNMENT.fullmatch(line)
+        if not match:
+            fail(f"line {line_number}: expected KEY=VALUE")
+        name, raw_value = match.groups()
+        if name not in EXPECTED:
+            fail(f"line {line_number}: unknown key {name}")
+        if name in values:
+            fail(f"line {line_number}: duplicate key {name}")
+        values[name] = parse_value(raw_value, line_number)
+
+    missing = [name for name in EXPECTED if name not in values]
+    if missing:
+        fail("missing required keys: " + ", ".join(missing))
+    output = sys.stdout.buffer
+    for name in EXPECTED:
+        output.write(name.encode() + b"\0" + values[name].encode() + b"\0")
+
+
+if __name__ == "__main__":
+    main()

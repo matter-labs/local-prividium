@@ -1,5 +1,0 @@
----
-# Copy to all.yml for an advanced remote-controller inventory. Never add Quay
-# credentials, RPC URLs, age identities, private keys, or generated passwords.
-prividium_operator_user: ubuntu
-prividium_runtime_dir: /etc/prividium/runtime

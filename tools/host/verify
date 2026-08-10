@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+source "${repo_root}/tools/host/common.sh"
+
+usage() {
+  cat <<'EOF'
+Verify the installed local Prividium host contract.
+
+Usage:
+  ./cli/prividium host verify
+
+Verification is read-only. It checks packages, pinned tools, services, Docker
+and Compose readiness, current-session group membership, bounded logs, update
+policies, the host-contract marker, and protected directories.
+EOF
+}
+
+if (( $# )); then
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    *) prividium_host_fail "unexpected host verify argument: $1" ;;
+  esac
+fi
+
+prividium_host_require_commands \
+  age awk cast docker dpkg-query getent grep id jq sops stat sudo systemctl tr
+prividium_host_require_operator
+prividium_host_marker_is_valid ||
+  prividium_host_fail "host-contract-v1 marker is missing or invalid"
+
+missing_packages=()
+for package in \
+  age ca-certificates chrony curl git gnupg jq openssl python3-apt \
+  python3-debian tar unattended-upgrades containerd.io docker-buildx-plugin \
+  docker-ce docker-ce-cli docker-compose-plugin; do
+  if ! dpkg-query -W -f='${db:Status-Abbrev}' "$package" 2>/dev/null | grep -q '^ii '; then
+    missing_packages+=("$package")
+  fi
+done
+(( ${#missing_packages[@]} == 0 )) ||
+  prividium_host_fail "required packages are missing: ${missing_packages[*]}"
+
+for service in docker.service chrony.service unattended-upgrades.service; do
+  systemctl is-enabled --quiet "$service" ||
+    prividium_host_fail "service is not enabled: ${service}"
+  systemctl is-active --quiet "$service" ||
+    prividium_host_fail "service is not active: ${service}"
+done
+for timer in apt-daily.timer apt-daily-upgrade.timer; do
+  systemctl is-enabled --quiet "$timer" ||
+    prividium_host_fail "timer is not enabled: ${timer}"
+  systemctl is-active --quiet "$timer" ||
+    prividium_host_fail "timer is not active: ${timer}"
+done
+
+operator=$(id -un)
+getent group docker | awk -F: -v user="$operator" '
+  { count=split($4, members, ","); for (i=1; i<=count; i++) if (members[i] == user) found=1 }
+  END { exit(found ? 0 : 1) }
+' || prividium_host_fail "operator is not recorded in the docker group"
+id -nG | tr ' ' '\n' | grep -Fxq docker ||
+  prividium_host_fail "current session does not include the docker group; reconnect and rerun verify"
+
+docker info --format '{{.ServerVersion}}' >/dev/null
+docker compose version --short >/dev/null
+[[ "$(sops --version 2>&1)" == *"${PRIVIDIUM_HOST_SOPS_VERSION}"* ]] ||
+  prividium_host_fail "unexpected SOPS version"
+[[ "$(cast --version 2>&1)" == *"${PRIVIDIUM_HOST_FOUNDRY_VERSION}"* ]] ||
+  prividium_host_fail "unexpected Foundry version"
+age --version >/dev/null
+
+[[ -d /etc/prividium && ! -L /etc/prividium ]] ||
+  prividium_host_fail "/etc/prividium is missing or unsafe"
+[[ "$(prividium_host_owner_group /etc/prividium)" == "root:root" &&
+   "$(prividium_host_mode /etc/prividium)" == "755" ]] ||
+  prividium_host_fail "/etc/prividium ownership or mode is invalid"
+[[ -d "$PRIVIDIUM_HOST_RUNTIME" && ! -L "$PRIVIDIUM_HOST_RUNTIME" ]] ||
+  prividium_host_fail "protected runtime directory is missing or unsafe"
+[[ "$(prividium_host_owner_group "$PRIVIDIUM_HOST_RUNTIME")" == "${operator}:root" &&
+   "$(prividium_host_mode "$PRIVIDIUM_HOST_RUNTIME")" == "700" ]] ||
+  prividium_host_fail "protected runtime ownership or mode is invalid"
+
+[[ -f /etc/docker/daemon.json && ! -L /etc/docker/daemon.json ]] ||
+  prividium_host_fail "Docker daemon configuration is missing or unsafe"
+jq -e '
+  .["log-driver"] == "json-file" and
+  .["log-opts"]["max-size"] == "10m" and
+  .["log-opts"]["max-file"] == "3"
+' /etc/docker/daemon.json >/dev/null ||
+  prividium_host_fail "Docker bounded-log configuration is invalid"
+
+prividium_host_file_has_line \
+  /etc/apt/apt.conf.d/21prividium-auto-upgrades \
+  'APT::Periodic::Unattended-Upgrade "1";' ||
+  prividium_host_fail "periodic unattended upgrades are not configured"
+prividium_host_file_has_line \
+  /etc/apt/apt.conf.d/99prividium-unattended-upgrades \
+  'Unattended-Upgrade::Automatic-Reboot "false";' ||
+  prividium_host_fail "automatic reboot policy is not disabled"
+
+reboot_required=false
+[[ -e /var/run/reboot-required ]] && reboot_required=true
+printf 'HOST INSTALLATION VERIFIED.\n\n'
+printf 'Operator:        %s\n' "$operator"
+printf 'Host contract:   %s\n' "$PRIVIDIUM_HOST_MARKER_VALUE"
+printf 'Docker:          %s\n' "$(docker --version)"
+printf 'Docker Compose:  %s\n' "$(docker compose version --short)"
+printf 'SOPS:            %s\n' "$PRIVIDIUM_HOST_SOPS_VERSION"
+printf 'Foundry:         %s\n' "$PRIVIDIUM_HOST_FOUNDRY_VERSION"
+printf 'reboot_required: %s\n\n' "$reboot_required"
+printf 'Remaining human checkpoints: provider firewall/DNS, input.env, Quay login, and Sepolia funding.\n'

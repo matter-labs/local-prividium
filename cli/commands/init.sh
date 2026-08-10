@@ -2,30 +2,23 @@
 
 prividium_init_usage() {
   cat <<'EOF'
-Initialize a Prividium evaluation sandbox.
+Initialize a Prividium evaluation sandbox from a protected input file.
 
 Usage:
-  ./cli/prividium init [--profile sandbox]
+  ./cli/prividium init [--profile sandbox] [--env-file <path>]
 
 Options:
   --profile sandbox  Sandbox profile to initialize (default: sandbox)
+  --env-file <path>  Human input file (default: deployment/input.env)
   -h, --help         Show this help
 
-Interactive inputs can also be provided through:
-  SANDBOX_DOMAIN
-  ACME_EMAIL
-  SEPOLIA_RPC_URL
-  SEPOLIA_BROWSER_RPC_URL
+The input file must be owned by the current operator with mode 0600 and contain
+exactly SANDBOX_DOMAIN, ACME_EMAIL, SEPOLIA_RPC_URL, and
+SEPOLIA_BROWSER_RPC_URL. It is parsed as data; shell expansion is never run.
 
-Evaluation credentials can be overridden through:
-  SANDBOX_ADMIN_EMAIL
-  SANDBOX_ADMIN_PASSWORD
-  SANDBOX_USER_1_EMAIL
-  SANDBOX_USER_1_PASSWORD
-  SANDBOX_USER_2_EMAIL
-  SANDBOX_USER_2_PASSWORD
-
-Password overrides may use letters, numbers, and ._%+@,/:=!?^-.
+Initialization generates strong random evaluation passwords and stores them
+only in the SOPS-encrypted configuration. Reveal them later with the explicit
+TTY-only command: ./cli/prividium credentials show
 
 Age encryption uses SOPS_AGE_KEY_FILE when supplied; SOPS_AGE_RECIPIENT may
 also be set when it matches that identity. Otherwise, a local identity is
@@ -33,58 +26,37 @@ generated at deployment/secrets/age.key.
 EOF
 }
 
-prividium_prompt_value() {
-  local name="$1"
-  local label="$2"
-  local secret="${3:-false}"
-  local value="${!name:-}"
+prividium_init_load_input() {
+  local input_file="$1"
+  local parsed_file
+  local name
+  local value
 
-  if [[ -n "$value" ]]; then
-    return
+  parsed_file=$(mktemp)
+  if ! "${PRIVIDIUM_REPO_ROOT}/tools/parse-input-env" "$input_file" > "$parsed_file"; then
+    rm -f -- "$parsed_file"
+    return 1
   fi
-  if [[ ! -t 0 ]]; then
-    prividium_fail "${name} is required in non-interactive mode"
-  fi
-  if [[ "$secret" == "true" ]]; then
-    read -r -s -p "${label}: " value
-    printf "\n"
-  else
-    read -r -p "${label}: " value
-  fi
-  if [[ -z "$value" ]]; then
-    prividium_fail "${name} cannot be empty"
-  fi
-  printf -v "$name" "%s" "$value"
-  export "$name"
-}
-
-prividium_display_credential() {
-  local value="$1"
-  local configured="$2"
-  if [[ "$configured" == "true" ]]; then
-    printf "%s" "[configured override]"
-  else
-    printf "%s" "$value"
-  fi
+  while IFS= read -r -d '' name && IFS= read -r -d '' value; do
+    printf -v "$name" '%s' "$value"
+    export "$name"
+  done < "$parsed_file"
+  rm -f -- "$parsed_file"
 }
 
 prividium_init() {
   local profile="sandbox"
+  local input_file="${PRIVIDIUM_REPO_ROOT}/deployment/input.env"
   local age_identity_label
   local age_identity_display
   local age_identity_message
   local age_key_file
-  local admin_email_configured="false"
-  local admin_password_configured="false"
   local browser_rpc_comparison
   local derived_recipient
   local private_rpc_comparison
   local rpc_url_pattern='^https://[A-Za-z0-9:/?&=._%+-]+$'
+  local email_pattern='^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+$'
   local show_help="false"
-  local user_1_email_configured="false"
-  local user_1_password_configured="false"
-  local user_2_email_configured="false"
-  local user_2_password_configured="false"
 
   while (( $# )); do
     case "$1" in
@@ -93,14 +65,21 @@ prividium_init() {
         shift
         ;;
       --profile)
-        if (( $# < 2 )); then
-          prividium_fail "--profile requires a value"
-        fi
+        (( $# >= 2 )) || prividium_fail "--profile requires a value"
         profile="$2"
         shift 2
         ;;
       --profile=*)
         profile="${1#--profile=}"
+        shift
+        ;;
+      --env-file)
+        (( $# >= 2 )) || prividium_fail "--env-file requires a value"
+        input_file="$2"
+        shift 2
+        ;;
+      --env-file=*)
+        input_file="${1#--env-file=}"
         shift
         ;;
       -*)
@@ -124,33 +103,31 @@ prividium_init() {
   fi
 
   prividium_require_commands \
-    "sandbox initialization" age age-keygen sops cast openssl curl jq
+    "sandbox initialization" age age-keygen sops cast openssl curl jq python3
+  if ! prividium_init_load_input "$input_file"; then
+    prividium_fail "sandbox input validation failed"
+  fi
 
-  [[ -z "${SANDBOX_ADMIN_EMAIL:-}" ]] || admin_email_configured="true"
-  [[ -z "${SANDBOX_ADMIN_PASSWORD:-}" ]] || admin_password_configured="true"
-  [[ -z "${SANDBOX_USER_1_EMAIL:-}" ]] || user_1_email_configured="true"
-  [[ -z "${SANDBOX_USER_1_PASSWORD:-}" ]] || user_1_password_configured="true"
-  [[ -z "${SANDBOX_USER_2_EMAIL:-}" ]] || user_2_email_configured="true"
-  [[ -z "${SANDBOX_USER_2_PASSWORD:-}" ]] || user_2_password_configured="true"
-
-  export SANDBOX_ADMIN_EMAIL="${SANDBOX_ADMIN_EMAIL:-admin@local.dev}"
-  export SANDBOX_ADMIN_PASSWORD="${SANDBOX_ADMIN_PASSWORD:-password}"
-  export SANDBOX_USER_1_EMAIL="${SANDBOX_USER_1_EMAIL:-user1@local.dev}"
-  export SANDBOX_USER_1_PASSWORD="${SANDBOX_USER_1_PASSWORD:-password}"
-  export SANDBOX_USER_2_EMAIL="${SANDBOX_USER_2_EMAIL:-user2@local.dev}"
-  export SANDBOX_USER_2_PASSWORD="${SANDBOX_USER_2_PASSWORD:-password}"
+  export SANDBOX_ADMIN_EMAIL=admin@local.dev
+  export SANDBOX_ADMIN_PASSWORD
+  SANDBOX_ADMIN_PASSWORD=$(openssl rand -hex 16)
+  export SANDBOX_USER_1_EMAIL=user1@local.dev
+  export SANDBOX_USER_1_PASSWORD
+  SANDBOX_USER_1_PASSWORD=$(openssl rand -hex 16)
+  export SANDBOX_USER_2_EMAIL=user2@local.dev
+  export SANDBOX_USER_2_PASSWORD
+  SANDBOX_USER_2_PASSWORD=$(openssl rand -hex 16)
 
   printf "Prividium sandbox initialization\n"
-  printf "Profile: %s\n\n" "$profile"
-
-  prividium_prompt_value SANDBOX_DOMAIN "Sandbox DNS domain"
-  prividium_prompt_value ACME_EMAIL "ACME notification email"
-  prividium_prompt_value SEPOLIA_RPC_URL "Private Sepolia RPC URL" true
-  prividium_prompt_value SEPOLIA_BROWSER_RPC_URL "Public browser Sepolia RPC URL"
+  printf "Profile: %s\n" "$profile"
+  printf "Input:   %s (validated; values hidden)\n\n" "$input_file"
 
   if ! prividium_domain_is_valid "$SANDBOX_DOMAIN"; then
     prividium_fail \
       "SANDBOX_DOMAIN must be a valid lower-case DNS name with labels no longer than 63 characters"
+  fi
+  if [[ ! "$ACME_EMAIL" =~ $email_pattern ]]; then
+    prividium_fail "ACME_EMAIL is invalid"
   fi
   if [[ ! "$SEPOLIA_RPC_URL" =~ $rpc_url_pattern ||
         ! "$SEPOLIA_BROWSER_RPC_URL" =~ $rpc_url_pattern ]]; then
@@ -213,28 +190,12 @@ prividium_init() {
         "$SOPS_AGE_RECIPIENT" != "$derived_recipient" ]]; then
     prividium_fail "SOPS_AGE_RECIPIENT does not match SOPS_AGE_KEY_FILE"
   fi
-
   export SOPS_AGE_RECIPIENT="$derived_recipient"
 
   printf "✓ %s\n" "$age_identity_message"
   OVERWRITE_SECRETS=false \
     SECRETS_OUTPUT="$PRIVIDIUM_ENCRYPTED_ENVIRONMENT" \
     "${PRIVIDIUM_REPO_ROOT}/tools/init-secrets"
-
-  printf "\nEvaluation users — available after deployment\n\n"
-  printf "%-28s %-24s %s\n" "EMAIL" "PASSWORD" "ROLE"
-  printf "%-28s %-24s %s\n" \
-    "$(prividium_display_credential "$SANDBOX_ADMIN_EMAIL" "$admin_email_configured")" \
-    "$(prividium_display_credential "$SANDBOX_ADMIN_PASSWORD" "$admin_password_configured")" \
-    "administrator; change password at first sign-in"
-  printf "%-28s %-24s %s\n" \
-    "$(prividium_display_credential "$SANDBOX_USER_1_EMAIL" "$user_1_email_configured")" \
-    "$(prividium_display_credential "$SANDBOX_USER_1_PASSWORD" "$user_1_password_configured")" \
-    "user"
-  printf "%-28s %-24s %s\n" \
-    "$(prividium_display_credential "$SANDBOX_USER_2_EMAIL" "$user_2_email_configured")" \
-    "$(prividium_display_credential "$SANDBOX_USER_2_PASSWORD" "$user_2_password_configured")" \
-    "user"
 
   if [[ "$age_key_file" == "$PRIVIDIUM_DEFAULT_AGE_KEY_FILE" ]]; then
     printf "\nGenerated files\n\n"
@@ -244,6 +205,9 @@ prividium_init() {
   printf "%-25s %s\n" "Encrypted configuration" "deployment/secrets/sandbox.enc.env"
   printf "%-25s %s\n" "$age_identity_label" "$age_identity_display"
   printf "%-25s %s\n" "Public role inventory" "deployment/public/roles.md"
+  printf "\nEvaluation passwords were generated and not printed.\n"
+  printf "Reveal them explicitly after deployment with: ./cli/prividium credentials show\n"
+  printf "After verifying these outputs, remove the plaintext input file: %s\n" "$input_file"
   printf "\nInitialization complete.\n"
   printf "Next: ./cli/prividium fund\n"
 }

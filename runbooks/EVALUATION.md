@@ -1,8 +1,14 @@
 # Engineering evaluation and BD handoff
 
-Use this checklist after `./cli/prividium deploy` completes successfully. It keeps
-the technical evaluation focused on product behavior and produces a compact
-record that an engineering team can share with its BD stakeholders.
+Use this checklist after `./cli/prividium deploy` completes successfully. It
+keeps the technical evaluation focused on product behavior and produces a
+compact record that an engineering team can share with its BD stakeholders.
+
+Before handoff, BD confirms that the customer has the approved repository
+revision, this evaluation-only boundary, a suitable VPS, a private
+archive-capable Sepolia RPC, a distinct browser RPC, and a pull-only Quay
+credential issued by Matter Labs DevOps. The customer installs and
+authenticates Codex CLI or Claude Code before invoking the repository skill.
 
 ## Evidence to retain
 
@@ -30,9 +36,13 @@ Confirm the deployment summary reports:
 
 ## Human evaluation journeys
 
+An authorized engineer retrieves the generated logins directly from a private
+SSH terminal with `./cli/prividium credentials show`. The command must not be
+run through an agent transcript or redirected to a file.
+
 ### Identity and access
 
-- Sign in as `admin@local.dev` or its configured override.
+- Sign in as `admin@local.dev`.
 - Confirm the administrator must change the initial password.
 - Sign in as both evaluation users.
 - Confirm users cannot access administrator-only behavior.
@@ -92,3 +102,23 @@ Keep the handoff short:
 
 Deferred SSO, webhook, and demo profiles should be listed as future evaluation
 work rather than activated through undocumented commands.
+
+## End of evaluation
+
+There is currently no automated uninstall workflow. When the evaluation ends:
+
+- retain only the approved public evidence and any separately approved secret
+  backup needed for an intentional extension;
+- have Matter Labs DevOps revoke the pull-only Quay credential;
+- run `docker logout quay.io` if the VPS will be retained;
+- revoke or rotate evaluation-specific RPC credentials;
+- remove the six public DNS records;
+- destroy the VPS and attached volumes through the provider, unless the
+  evaluation owner explicitly approves continued retention; and
+- record the cleanup owner and completion date in the BD report.
+
+Running `docker compose down` is not complete cleanup because encrypted files,
+the age identity, protected runtime, Docker volumes, and on-chain Sepolia
+contracts remain. Destroying the dedicated evaluation VPS is the expected
+cleanup boundary. Sepolia contracts and transactions cannot be removed; never
+reuse their evaluation keys for another environment or assets of value.

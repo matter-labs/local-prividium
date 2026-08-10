@@ -1,0 +1,6 @@
+interface:
+  display_name: "Deploy Prividium"
+  short_description: "Deploy a Prividium evaluation VPS"
+  default_prompt: "Use $deploy-prividium to deploy and verify the Prividium evaluation stack on this VPS."
+policy:
+  allow_implicit_invocation: false

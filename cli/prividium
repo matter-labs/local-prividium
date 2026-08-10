@@ -6,8 +6,8 @@ PRIVIDIUM_REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 export PRIVIDIUM_REPO_ROOT
 
 # The public CLI owns its internal paths, image identity, and health timeout.
-# Only documented initialization values, age overrides, and broadcast
-# confirmation are accepted from the invoking environment.
+# Only documented age overrides and broadcast confirmation are accepted from
+# the invoking environment. Human initialization values come from input.env.
 unset \
   CHAIN_BOOTSTRAP_MODE \
   DEPLOYMENT_SUMMARY_PATH \
@@ -35,13 +35,14 @@ Usage:
   ./cli/prividium --help
 
 Commands:
-  host       Bootstrap, provision, and verify an evaluation VPS
-  init       Initialize an evaluation sandbox
-  fund       Fund identities required for protocol deployment
-  preflight  Check evaluation prerequisites before protocol preparation
-  prepare    Prepare runtime state and simulate protocol deployment
-  broadcast  Broadcast the prepared protocol deployment to Sepolia
-  deploy     Start and validate the sandbox services
+  host         Bootstrap, provision, and verify an evaluation VPS
+  init         Initialize an evaluation sandbox
+  credentials  Reveal generated evaluation login credentials
+  fund         Fund identities required for protocol deployment
+  preflight    Check evaluation prerequisites before protocol preparation
+  prepare      Prepare runtime state and simulate protocol deployment
+  broadcast    Broadcast the prepared protocol deployment to Sepolia
+  deploy       Start and validate the sandbox services
 
 Evaluation workflow:
   ./cli/prividium host bootstrap
@@ -62,9 +63,7 @@ EOF
 
 command="${1:-help}"
 shift || true
-if [[ "$command" != "init" ]]; then
-  prividium_clear_runtime_values
-fi
+prividium_clear_runtime_values
 
 case "$command" in
   help|-h|--help)
@@ -76,6 +75,10 @@ case "$command" in
   init)
     source "${PRIVIDIUM_REPO_ROOT}/cli/commands/init.sh"
     prividium_init "$@"
+    ;;
+  credentials)
+    source "${PRIVIDIUM_REPO_ROOT}/cli/commands/credentials.sh"
+    prividium_credentials "$@"
     ;;
   host)
     source "${PRIVIDIUM_REPO_ROOT}/cli/commands/host.sh"

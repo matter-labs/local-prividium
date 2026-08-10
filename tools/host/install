@@ -1,0 +1,151 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+
+repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+source "${repo_root}/tools/host/common.sh"
+
+usage() {
+  cat <<'EOF'
+Install the supported Prividium evaluation host baseline.
+
+Usage:
+  ./cli/prividium host install [--check] [--yes]
+
+Options:
+  --check  Run preflight and print the exact managed boundary without changes
+  --yes    Apply non-interactively after the plan has been reviewed
+  -h       Show this help
+EOF
+}
+
+check_mode=false
+confirmed=false
+while (( $# )); do
+  case "$1" in
+    --check) check_mode=true; shift ;;
+    --yes) confirmed=true; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) prividium_host_fail "unexpected host install argument: $1" ;;
+  esac
+done
+[[ "$check_mode" != "true" || "$confirmed" != "true" ]] ||
+  prividium_host_fail "--check and --yes cannot be combined"
+
+"${repo_root}/tools/host/preflight"
+printf '\n'
+prividium_host_print_install_plan
+if [[ "$check_mode" == "true" ]]; then
+  printf '\nINSTALLATION PLAN COMPLETE. No host changes were made.\n'
+  printf 'Next: ./cli/prividium host install\n'
+  exit 0
+fi
+
+if [[ "$confirmed" != "true" ]]; then
+  [[ -t 0 ]] ||
+    prividium_host_fail "non-interactive installation requires --yes after reviewing --check"
+  read -r -p 'Type INSTALL to apply these host changes: ' confirmation
+  if [[ "$confirmation" != "INSTALL" ]]; then
+    printf 'Host installation cancelled; no changes were made.\n'
+    exit 0
+  fi
+fi
+
+operator=$(id -un)
+temporary_dir=$(mktemp -d)
+trap 'rm -rf -- "$temporary_dir"' EXIT
+
+sudo -n install -d -m 0755 -o root -g root /etc/prividium
+printf '%s\n' "$PRIVIDIUM_HOST_MARKER_VALUE" > "${temporary_dir}/host-contract-version"
+sudo -n install -m 0644 -o root -g root \
+  "${temporary_dir}/host-contract-version" "$PRIVIDIUM_HOST_MARKER"
+
+export DEBIAN_FRONTEND=noninteractive
+sudo -n apt-get update
+sudo -n apt-get upgrade --yes
+sudo -n apt-get install --yes \
+  age ca-certificates chrony curl git gnupg jq openssl python3-apt \
+  python3-debian tar unattended-upgrades
+
+curl --fail --location --silent --show-error \
+  "https://github.com/getsops/sops/releases/download/v${PRIVIDIUM_HOST_SOPS_VERSION}/sops-v${PRIVIDIUM_HOST_SOPS_VERSION}.linux.amd64" \
+  --output "${temporary_dir}/sops"
+printf '%s  %s\n' "$PRIVIDIUM_HOST_SOPS_SHA256" "${temporary_dir}/sops" | sha256sum --check --status
+sudo -n install -m 0755 -o root -g root "${temporary_dir}/sops" /usr/local/bin/sops
+
+curl --fail --location --silent --show-error \
+  "https://github.com/foundry-rs/foundry/releases/download/v${PRIVIDIUM_HOST_FOUNDRY_VERSION}/foundry_v${PRIVIDIUM_HOST_FOUNDRY_VERSION}_linux_amd64.tar.gz" \
+  --output "${temporary_dir}/foundry.tar.gz"
+printf '%s  %s\n' "$PRIVIDIUM_HOST_FOUNDRY_SHA256" "${temporary_dir}/foundry.tar.gz" | sha256sum --check --status
+foundry_dir="/opt/prividium/tools/foundry-v${PRIVIDIUM_HOST_FOUNDRY_VERSION}"
+sudo -n install -d -m 0755 -o root -g root "$foundry_dir"
+sudo -n tar -xzf "${temporary_dir}/foundry.tar.gz" -C "$foundry_dir"
+for binary in anvil cast chisel forge; do
+  sudo -n chmod 0755 "${foundry_dir}/${binary}"
+  sudo -n ln -sfn "${foundry_dir}/${binary}" "/usr/local/bin/${binary}"
+done
+
+curl --fail --location --silent --show-error \
+  https://download.docker.com/linux/ubuntu/gpg \
+  --output "${temporary_dir}/docker.asc"
+printf '%s  %s\n' "$PRIVIDIUM_HOST_DOCKER_KEY_SHA256" "${temporary_dir}/docker.asc" | sha256sum --check --status
+sudo -n install -d -m 0755 -o root -g root /etc/apt/keyrings
+sudo -n install -m 0644 -o root -g root "${temporary_dir}/docker.asc" /etc/apt/keyrings/docker.asc
+cat > "${temporary_dir}/docker.sources" <<'EOF'
+Types: deb
+URIs: https://download.docker.com/linux/ubuntu
+Suites: noble
+Components: stable
+Architectures: amd64
+Signed-By: /etc/apt/keyrings/docker.asc
+EOF
+sudo -n install -m 0644 -o root -g root "${temporary_dir}/docker.sources" /etc/apt/sources.list.d/docker.sources
+sudo -n apt-get update
+sudo -n apt-get install --yes \
+  containerd.io docker-buildx-plugin docker-ce docker-ce-cli docker-compose-plugin
+
+sudo -n install -d -m 0755 -o root -g root /etc/docker
+if [[ -L /etc/docker/daemon.json ]]; then
+  prividium_host_fail "refusing to manage symbolic-link /etc/docker/daemon.json"
+fi
+if [[ -f /etc/docker/daemon.json ]]; then
+  jq -e 'type == "object"' /etc/docker/daemon.json >/dev/null ||
+    prividium_host_fail "/etc/docker/daemon.json is not a valid JSON object"
+  jq '. * {"log-driver":"json-file","log-opts":{"max-size":"10m","max-file":"3"}}' \
+    /etc/docker/daemon.json > "${temporary_dir}/daemon.json"
+else
+  printf '%s\n' '{"log-driver":"json-file","log-opts":{"max-size":"10m","max-file":"3"}}' |
+    jq . > "${temporary_dir}/daemon.json"
+fi
+docker_restart=false
+if [[ ! -f /etc/docker/daemon.json ]] || ! cmp -s "${temporary_dir}/daemon.json" /etc/docker/daemon.json; then
+  sudo -n install -m 0644 -o root -g root "${temporary_dir}/daemon.json" /etc/docker/daemon.json
+  docker_restart=true
+fi
+
+cat > "${temporary_dir}/21prividium-auto-upgrades" <<'EOF'
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
+EOF
+cat > "${temporary_dir}/99prividium-unattended-upgrades" <<'EOF'
+Unattended-Upgrade::Automatic-Reboot "false";
+EOF
+sudo -n install -m 0644 -o root -g root \
+  "${temporary_dir}/21prividium-auto-upgrades" /etc/apt/apt.conf.d/21prividium-auto-upgrades
+sudo -n install -m 0644 -o root -g root \
+  "${temporary_dir}/99prividium-unattended-upgrades" /etc/apt/apt.conf.d/99prividium-unattended-upgrades
+
+sudo -n usermod -aG docker "$operator"
+sudo -n systemctl enable --now docker.service chrony.service unattended-upgrades.service
+sudo -n systemctl enable --now apt-daily.timer apt-daily-upgrade.timer
+if [[ "$docker_restart" == "true" ]]; then
+  sudo -n systemctl restart docker.service
+fi
+sudo -n install -d -m 0700 -o "$operator" -g root "$PRIVIDIUM_HOST_RUNTIME"
+
+reboot_required=false
+[[ -e /var/run/reboot-required ]] && reboot_required=true
+printf '\nHOST INSTALLATION COMPLETE.\n'
+printf 'reboot_required=%s\n\n' "$reboot_required"
+printf 'Reconnect the operator SSH session, reboot first when required, then run:\n'
+printf '  ./cli/prividium host verify\n'

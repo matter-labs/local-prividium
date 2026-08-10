@@ -1,2 +1,0 @@
--r requirements.txt
-ansible-lint==26.6.0

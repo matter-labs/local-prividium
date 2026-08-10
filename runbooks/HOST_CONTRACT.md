@@ -5,8 +5,8 @@ sandbox. It is the acceptance contract for the implemented host automation and
 the customer-controlled network preparation that surrounds it.
 
 > [!IMPORTANT]
-> The Ansible layer implements read-only preflight, reviewable installation,
-> and read-only installation verification. Provider firewall rules and
+> The local CLI host backend implements read-only preflight, reviewable
+> installation, and read-only verification. Provider firewall rules and
 > external network verification remain customer actions documented in
 > [SETUP.md](SETUP.md). Host firewall and SSH changes are deferred.
 
@@ -36,8 +36,7 @@ The automated path supports exactly:
 - a conventional systemd installation;
 - Docker Engine with Docker Compose v2.
 
-Other Linux distributions may work with manual preparation, but
-they are outside the initial host-automation support contract.
+Other Linux distributions are outside the supported evaluation path.
 
 The customer is responsible for the VPS account, provider billing, public IP,
 DNS zone, SSH keys, recovery console, and any provider-level firewall.
@@ -110,10 +109,10 @@ not receive public DNS records.
 
 ## Access and SSH safety
 
-The implemented installer runs as the current operator and does not alter SSH.
-For an initially root-only image, the separate root-only
-`host operator create` command may install a customer-selected public-key source
-for a locked-password operator. It does not change sshd, disable root access, or
+The implemented local installer runs as the current operator and does not
+alter SSH. For an initially root-only image, the separate root-only `host
+operator create` command may install a customer-selected public-key source for
+a locked-password operator. It does not change sshd, disable root access, or
 activate a firewall, and requires a human to verify a second SSH connection
 before continuing. The customer-selected SSH port and allowed source CIDRs
 remain explicit inputs for the deferred SSH/firewall milestone.
@@ -144,12 +143,13 @@ The deployment user owns the protected runtime:
 | Path | Expected protection |
 | --- | --- |
 | `/etc/prividium` | Not writable by unprivileged users |
+| `/etc/prividium/.host-contract-version` | Root-owned, mode `0644`; contains `host-contract-v1` |
 | `/etc/prividium/runtime` | Deployment user, mode `0700` |
 | `/etc/prividium/runtime/sandbox.env` | Deployment user, mode `0600` |
 | `deployment/secrets/age.key` | Deployment user, mode `0600`, Gitignored |
 | Docker registry credential file | Deployment user, mode `0600` |
 
-The Ansible layer must not receive or manage:
+The host backend must not receive or manage:
 
 - Quay passwords or tokens;
 - SOPS age identities;
@@ -161,8 +161,8 @@ The Ansible layer must not receive or manage:
 Quay credentials are supplied separately by Matter Labs DevOps. They are
 pull-only, repository-scoped where supported, and time-limited or revoked at
 the end of the evaluation. Authentication uses `docker login --password-stdin`
-and must not appear in Git, inventory, command arguments, Ansible output, or
-agent transcripts.
+and must not appear in Git, the human input file, command arguments, CLI
+output, or agent transcripts.
 
 ## Host security baseline
 
@@ -190,7 +190,7 @@ of installing the sandbox.
 | --- | --- |
 | VPS, provider firewall, SSH keys, DNS, recovery console | Customer |
 | Pull-only Quay credential issuance and revocation | Matter Labs DevOps |
-| Host validation, packages, tools, and Docker | Ansible layer |
+| Host validation, packages, tools, and Docker | Local CLI host backend |
 | Encrypted configuration, identities, funding, deployment | Prividium CLI |
 | Docker services and persistent volumes | Compose deployment |
 | Evaluation access and eventual cleanup | Customer evaluation team |
@@ -226,3 +226,7 @@ This contract does not provide:
 
 Those topics belong to the production deployment engagement after the
 evaluation.
+
+Existing Ansible-prepared hosts, remote inventories, and migrations are not
+part of this contract. Recreate the disposable VPS and use the local
+`host-contract-v1` workflow.

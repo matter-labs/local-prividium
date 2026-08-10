@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+source "${repo_root}/tools/host/common.sh"
+
+usage() {
+  cat <<'EOF'
+Run the read-only local VPS compatibility assessment.
+
+Usage:
+  ./cli/prividium host preflight
+
+The command validates Ubuntu 24.04 amd64, capacity, the local operator,
+dedicated-host assumptions, conflicting packages/services/listeners, existing
+Docker state, and outbound Docker/Quay connectivity. It makes no host changes.
+EOF
+}
+
+if (( $# )); then
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    *) prividium_host_fail "unexpected host preflight argument: $1" ;;
+  esac
+fi
+
+prividium_host_require_commands \
+  awk df dpkg-query getconf grep id python3 ss stat sudo systemctl tr uname
+prividium_host_require_operator
+
+# shellcheck disable=SC1091
+source /etc/os-release
+systemd_present=false
+[[ -d /run/systemd/system ]] && systemd_present=true
+prividium_host_assert_platform \
+  "${ID:-}" "${VERSION_ID:-}" "$(uname -s)" "$(uname -m)" "$systemd_present"
+
+vcpus=$(getconf _NPROCESSORS_ONLN)
+memory_kib=$(awk '/^MemTotal:/ {print $2}' /proc/meminfo)
+root_bytes=$(df -B1 --output=size / | awk 'NR == 2 {print $1}')
+[[ "$vcpus" =~ ^[0-9]+$ && "$memory_kib" =~ ^[0-9]+$ && "$root_bytes" =~ ^[0-9]+$ ]] ||
+  prividium_host_fail "could not determine VPS capacity"
+prividium_host_assert_capacity "$vcpus" "$memory_kib" "$root_bytes"
+
+managed=false
+if [[ -e "$PRIVIDIUM_HOST_MARKER" || -L "$PRIVIDIUM_HOST_MARKER" ]]; then
+  prividium_host_marker_is_valid ||
+    prividium_host_fail "existing host marker is invalid or unsupported: ${PRIVIDIUM_HOST_MARKER}"
+  managed=true
+fi
+
+conflicting_packages=()
+for package in containerd docker.io docker-compose docker-compose-v2 podman-docker runc; do
+  if dpkg-query -W -f='${db:Status-Abbrev}' "$package" 2>/dev/null | grep -q '^ii '; then
+    conflicting_packages+=("$package")
+  fi
+done
+if (( ${#conflicting_packages[@]} )); then
+  prividium_host_fail "conflicting container packages are installed: ${conflicting_packages[*]}"
+fi
+
+conflicting_services=()
+for service in \
+  k3s.service kubelet.service rke2-agent.service rke2-server.service \
+  snap.microk8s.daemon-kubelite.service; do
+  if systemctl list-unit-files "$service" --no-legend 2>/dev/null | grep -q .; then
+    conflicting_services+=("$service")
+  fi
+done
+if (( ${#conflicting_services[@]} )); then
+  prividium_host_fail "conflicting orchestration services are installed: ${conflicting_services[*]}"
+fi
+
+reserved_listeners=$(ss -H -lntu | awk '
+  {
+    address=$5
+    sub(/^.*:/, "", address)
+    if (address == "80" || address == "443" || address == "3100") print $0
+  }
+')
+if [[ "$managed" != "true" && -n "$reserved_listeners" ]]; then
+  printf '%s\n' "$reserved_listeners" >&2
+  prividium_host_fail "ports 80, 443, or 3100 are already in use"
+fi
+
+if [[ "$managed" != "true" && ( -e /etc/prividium || -L /etc/prividium ) ]]; then
+  prividium_host_fail "existing /etc/prividium state is outside the blank-host contract"
+fi
+if [[ "$managed" != "true" ]] && command -v docker >/dev/null 2>&1; then
+  existing_containers=$(sudo -n docker ps --all --quiet 2>/dev/null || true)
+  [[ -z "$existing_containers" ]] ||
+    prividium_host_fail "existing Docker containers are outside the blank-host contract"
+fi
+
+python3 - <<'PY'
+import urllib.error
+import urllib.request
+
+checks = (
+    ("Docker Ubuntu repository", "https://download.docker.com/linux/ubuntu/dists/noble/Release", {200}),
+    ("Quay registry", "https://quay.io/v2/", {200, 401}),
+)
+failures = []
+for name, url, accepted in checks:
+    request = urllib.request.Request(url, headers={"User-Agent": "prividium-host-preflight/1"})
+    try:
+        with urllib.request.urlopen(request, timeout=15) as response:
+            status = response.status
+    except urllib.error.HTTPError as error:
+        status = error.code
+    except Exception as error:  # Network and TLS errors are reported without a traceback.
+        failures.append(f"{name}: {error}")
+        continue
+    if status not in accepted:
+        failures.append(f"{name}: HTTP {status}")
+if failures:
+    raise SystemExit("Required outbound HTTPS checks failed: " + "; ".join(failures))
+PY
+
+printf 'Prividium read-only host preflight\n\n'
+printf 'Operator: %s\n' "$(id -un)"
+printf 'Platform: Ubuntu %s %s\n' "${VERSION_ID}" "$(uname -m)"
+printf 'Capacity: %s vCPU, %s MiB RAM, %s root bytes\n' \
+  "$vcpus" "$((memory_kib / 1024))" "$root_bytes"
+printf 'Managed:  %s\n' "$managed"
+printf 'Mode:     read-only; no remediation\n\n'
+if (( vcpus < PRIVIDIUM_HOST_RECOMMENDED_VCPUS )); then
+  printf 'Recommendation: 8 vCPU improves preparation, indexing, and catch-up.\n'
+fi
+if (( memory_kib < PRIVIDIUM_HOST_RECOMMENDED_MEMORY_KIB )); then
+  printf 'Recommendation: 16 GiB RAM provides additional startup headroom.\n'
+fi
+printf 'READ-ONLY HOST PREFLIGHT PASSED.\n'
