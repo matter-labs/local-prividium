@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
   "l1_chain_id": 11155111,
+  "canary_reserve_wei": "50000000000000000",
   "targets_wei": {
     "l1_deployer": "400000000000000000",
     "ecosystem_governor": "100000000000000000",

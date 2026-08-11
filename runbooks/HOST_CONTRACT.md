@@ -8,7 +8,8 @@ the customer-controlled network preparation that surrounds it.
 > The local CLI host backend implements read-only preflight, reviewable
 > installation, and read-only verification. Provider firewall rules and
 > external network verification remain customer actions documented in
-> [SETUP.md](SETUP.md). Host firewall and SSH changes are deferred.
+> [SETUP.md](SETUP.md). Host firewall and SSH changes are deferred,
+> nonblocking, and strongly recommended.
 
 ## Purpose
 
@@ -28,10 +29,10 @@ The automated path supports exactly:
 - Linux `amd64`;
 - one VPS with a public IPv4 address;
 - a non-root, key-authenticated SSH account with passwordless `sudo`;
-- at least 4 vCPU, with 8 vCPU recommended;
-- at least 8 GB RAM, with 16 GB recommended;
-- a nominal 200 GB SSD plan or better; preflight accepts at least 190 GB of
-  usable root-filesystem capacity after normal partition overhead;
+- a recommended target of 8 vCPU, 16 GB RAM, and a nominal 200 GB SSD;
+- permission to continue below that sizing target after preflight reports the
+  actual capacity; SSD backing is confirmed from the provider plan rather than
+  enforced from virtual block-device metadata;
 - a provider recovery console or equivalent out-of-band access;
 - a conventional systemd installation;
 - Docker Engine with Docker Compose v2.
@@ -163,6 +164,9 @@ pull-only, repository-scoped where supported, and time-limited or revoked at
 the end of the evaluation. Authentication uses `docker login --password-stdin`
 and must not appear in Git, the human input file, command arguments, CLI
 output, or agent transcripts.
+No workflow step publishes, pushes, or signs an image. Product and supporting
+images are pulled by locked digest; only the chain-bootstrap and balance
+exporter helpers are built locally.
 
 ## Host security baseline
 
@@ -210,7 +214,9 @@ A host satisfies this contract when:
 - protected files and directories have the required ownership and modes;
 - Quay authentication succeeds without exposing the credential;
 - `./cli/prividium preflight` passes after initialization and funding;
-- the generated deployment summary reports healthy public interfaces.
+- the generated deployment summary reports healthy public interfaces;
+- `./cli/prividium verify` records authenticated RPC, a successful canary
+  receipt, and Explorer indexing.
 
 ## Non-goals
 

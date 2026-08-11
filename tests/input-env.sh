@@ -39,6 +39,18 @@ prividium_init_load_input "$valid"
 [[ "$SEPOLIA_RPC_URL" == "https://private-archive-sepolia-rpc.example.com" ]]
 [[ "$SEPOLIA_BROWSER_RPC_URL" == "https://public-browser-sepolia-rpc.example.com" ]]
 
+with_chain_id="${TEST_SANDBOX}/input-with-chain-id.env"
+cp "$valid" "$with_chain_id"
+printf 'L2_CHAIN_ID=1900000001\n' >>"$with_chain_id"
+chmod 0600 "$with_chain_id"
+"${TEST_REPO_ROOT}/tools/parse-input-env" "$with_chain_id" |
+  python3 -c '
+import sys
+parts = sys.stdin.buffer.read().split(b"\0")
+values = dict(zip(parts[0:-1:2], parts[1:-1:2], strict=True))
+assert values[b"L2_CHAIN_ID"] == b"1900000001"
+'
+
 missing="${TEST_SANDBOX}/missing.env"
 grep -v '^ACME_EMAIL=' "$valid" > "$missing"
 chmod 0600 "$missing"

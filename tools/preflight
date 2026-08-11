@@ -731,7 +731,7 @@ printf "\nEvaluation boundary\n"
 printf "• Single-host Sepolia sandbox using fake proofs and a testnet verifier\n"
 printf "• SOPS-managed hot keys intended only for assets without value\n"
 printf "• Optional profiles receive static validation but are not activated or runtime-checked\n"
-printf "• Recommended 8 vCPU, 16 GB RAM, 200 GB SSD, and clock sync are not verified\n"
+printf "• Host preflight reports the recommended 8 vCPU, 16 GB RAM, and nominal 200 GB SSD without blocking\n"
 printf "• Passing preflight is not production or protocol-broadcast approval\n"
 
 printf "\n"

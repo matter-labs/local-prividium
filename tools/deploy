@@ -68,6 +68,13 @@ if ! jq -e \
     .sources.protocol == $protocol and
     .sources.zk_deployer == $deployer and
     .genesis.sha256 == $genesis_sha and
+    .data_availability.mode == "no_da" and
+    .data_availability.type == "validium" and
+    .data_availability.l2_commitment_scheme == "empty_no_da" and
+    (.data_availability.l1_validator | type == "string" and test("^0x[0-9a-fA-F]{40}$")) and
+    (.transaction_filterer.address | type == "string" and test("^0x[0-9a-fA-F]{40}$")) and
+    .transaction_filterer.chain_admin_whitelisted == true and
+    .transaction_filterer.deposits_allowed == true and
     .security.proofs == "fake" and
     .security.verifier == "testnet" and
     .security.production_safe == false
@@ -85,6 +92,9 @@ if ! jq -e \
     .l2_chain_id == $chain_id and
     .sources.protocol == $protocol and
     .sources.zk_deployer == $deployer and
+    .data_availability_mode == "no_da" and
+    .transaction_filterer.enabled == true and
+    .transaction_filterer.deposits_allowed == true and
     (.chain_bootstrap_image_id |
       type == "string" and
       test("^sha256:[0-9a-f]{64}$"))

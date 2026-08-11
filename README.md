@@ -41,24 +41,27 @@ The agent identifies and verifies these checkpoints in order:
 
 1. Verify a non-root passwordless-sudo operator and reconnect when required.
 2. Reconnect after Docker group membership, rebooting first only when required.
-3. Edit the protected four-field `deployment/input.env` directly on the VPS.
-4. Configure the provider firewall and six public DNS records.
+3. Edit the protected input file directly on the VPS; optionally choose the L2 chain ID.
+4. Configure the strongly recommended provider firewall and six required public DNS records.
 5. Authenticate Docker to Quay with the issued pull-only credential.
 6. Fund the generated Sepolia wallet and approve distribution.
 7. Review and explicitly authorize the prepared Sepolia protocol broadcast.
-8. Reveal generated evaluation logins only when requested.
+8. Review and explicitly authorize the minimal acceptance canary.
+9. Reveal generated evaluation logins only when requested.
 
 Provider firewall rules, DNS, Quay credential issuance, agent installation,
-RPC procurement, and Sepolia funding remain human-controlled. Host firewall
-automation is deferred.
+RPC procurement, and Sepolia funding remain human-controlled. Host and provider
+firewall automation is deferred and does not block the CLI, but the documented
+default-deny policy is strongly recommended before public DNS is enabled.
 
 ## Supported VPS
 
 - Ubuntu Server 24.04 LTS, `amd64`, systemd, and a public IPv4 address.
 - Dedicated blank host with a key-authenticated non-root passwordless-sudo
   operator.
-- Minimum 4 vCPU and 8 GB RAM; 8 vCPU and 16 GB RAM are recommended.
-- Nominal 200 GB SSD; preflight accepts at least 190 GB usable root capacity.
+- Recommended sizing is 8 vCPU, 16 GB RAM, and a nominal 200 GB SSD.
+- Preflight reports lower capacity without blocking deployment; confirm SSD
+  backing with the VPS provider.
 - Provider recovery console or equivalent out-of-band access.
 
 The host installer supplies safe Ubuntu upgrades, baseline packages, Chrony,
@@ -87,6 +90,7 @@ manual fallback documented in [the setup guide](runbooks/SETUP.md):
 ./cli/prividium prepare
 ./cli/prividium broadcast
 ./cli/prividium deploy
+./cli/prividium verify
 ```
 
 - Host commands operate only on the current VPS. Remote inventories are not
@@ -97,20 +101,30 @@ manual fallback documented in [the setup guide](runbooks/SETUP.md):
 - `preflight` validates configuration, RPC, registry, DNS, Compose, identities,
   and funding without changing state.
 - `prepare` builds and simulates the protocol deployment without transactions.
+- `prepare` pulls the existing digest-pinned product images and builds only the
+  local chain-bootstrap and operator-balance-exporter helpers. Nothing is
+  published to a registry.
 - `broadcast` requires chain-specific human approval before Sepolia
   transactions.
 - `deploy` starts and verifies the persistent evaluation services.
+- `verify` uses a non-admin OIDC login, authenticated RPC, a confirmation-gated
+  deposit receipt, and Explorer indexing to establish `READY`.
+- `status [--json]` reports the resumable stage without decrypting secrets or
+  repeating funding and broadcast transactions. Interrupted approved writes
+  become manual-review stages instead of retry instructions.
 - `credentials show` is a confirmation-gated, TTY-only credential reveal.
 
 ## Human input and generated configuration
 
-`deployment/input.env.example` is the template for the only four human values:
+`deployment/input.env.example` requires four human values and accepts one
+optional override:
 
 ```text
 SANDBOX_DOMAIN
 ACME_EMAIL
 SEPOLIA_RPC_URL
 SEPOLIA_BROWSER_RPC_URL
+L2_CHAIN_ID (optional; generated in 1073741824..2147483647 when omitted)
 ```
 
 The private RPC must support historical calls/logs, receipts, and blob-fee
@@ -124,7 +138,8 @@ Compose validation. Customers do not fill it in.
 
 ## What runs
 
-- ZKsync OS `0.20.8` with Protocol `v0.31.0`, rollup DA, and fake proofs.
+- ZKsync OS `0.20.8` with Protocol `v0.31.0`, Stage-0 Validium (`no_da`),
+  the Prividium transaction filterer, and fake proofs.
 - Prividium API, user panel, administration panel, and protected RPC.
 - PostgreSQL and Keycloak with one administrator and two evaluation users.
 - Block Explorer application, API, worker, and data fetcher.
@@ -133,7 +148,8 @@ Compose validation. Customers do not fill it in.
 
 The default model has 14 long-running services and one successful one-shot
 `chain-preflight` job. SSO, webhook, and institutional-demo implementations
-remain deferred profiles and are not part of the initial customer path.
+remain in the repository as explicitly unsupported profiles and are not part
+of the customer happy path.
 
 ## Public interfaces
 
@@ -153,13 +169,14 @@ published. Grafana binds to `127.0.0.1:3100` for an SSH tunnel.
 
 ## Generated evidence
 
-The deployment produces three commit-safe public records:
+The deployment produces four commit-safe public records:
 
 | File | Purpose |
 | --- | --- |
 | `deployment/public/roles.md` | Generated public identities and roles |
 | `deployment/public/manifest.json` | Protocol addresses, genesis, locks, and transaction hashes |
 | `deployment/public/deployment-summary.md` | Healthy services and public endpoints |
+| `deployment/public/happy-path.json` | Authenticated canary receipt and Explorer READY evidence |
 
 Private keys, passwords, RPC credentials, and the age identity must never be
 included in an evaluation report. See [the evaluation guide](runbooks/EVALUATION.md)
@@ -183,5 +200,5 @@ for the engineering and BD handoff.
 ```
 
 `compose/compose.yaml` is the only Compose entrypoint. Component versions,
-source commits, image digests, and deferred profiles are recorded in
+source commits, image digests, and retained unsupported profiles are recorded in
 `deployment/versions.lock.yaml`.

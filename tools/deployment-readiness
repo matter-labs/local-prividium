@@ -263,6 +263,9 @@ if [[ "$runtime_values_ready" == "true" &&
         test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")) and
       .sources.protocol == $protocol and
       .sources.zk_deployer == $deployer and
+      .data_availability_mode == "no_da" and
+      .transaction_filterer.enabled == true and
+      .transaction_filterer.deposits_allowed == true and
       .chain_state_sha256 == $state_sha and
       (.chain_bootstrap_image_id |
         type == "string" and

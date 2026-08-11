@@ -3,11 +3,9 @@
 PRIVIDIUM_HOST_MARKER=/etc/prividium/.host-contract-version
 PRIVIDIUM_HOST_MARKER_VALUE=host-contract-v1
 PRIVIDIUM_HOST_RUNTIME=/etc/prividium/runtime
-PRIVIDIUM_HOST_MINIMUM_VCPUS=4
-PRIVIDIUM_HOST_RECOMMENDED_VCPUS=8
-PRIVIDIUM_HOST_MINIMUM_MEMORY_KIB=7864320
-PRIVIDIUM_HOST_RECOMMENDED_MEMORY_KIB=15728640
-PRIVIDIUM_HOST_MINIMUM_ROOT_BYTES=190000000000
+PRIVIDIUM_HOST_TARGET_VCPUS=8
+PRIVIDIUM_HOST_TARGET_MEMORY_KIB=15728640
+PRIVIDIUM_HOST_TARGET_ROOT_BYTES=190000000000
 PRIVIDIUM_HOST_SOPS_VERSION=3.13.3
 PRIVIDIUM_HOST_SOPS_SHA256=e5bec3346a873ae91d871550f3e698c1aad962aff462a080e40f25fde17fef6b
 PRIVIDIUM_HOST_FOUNDRY_VERSION=1.5.1
@@ -77,19 +75,6 @@ prividium_host_assert_platform() {
     prividium_host_fail "supported platform is Linux amd64"
   [[ "$systemd_present" == "true" ]] ||
     prividium_host_fail "a conventional systemd VPS is required"
-}
-
-prividium_host_assert_capacity() {
-  local vcpus="$1"
-  local memory_kib="$2"
-  local root_bytes="$3"
-
-  (( vcpus >= PRIVIDIUM_HOST_MINIMUM_VCPUS )) ||
-    prividium_host_fail "at least 4 vCPU are required; found ${vcpus}"
-  (( memory_kib >= PRIVIDIUM_HOST_MINIMUM_MEMORY_KIB )) ||
-    prividium_host_fail "at least 8 GiB nominal RAM are required; found $((memory_kib / 1024)) MiB"
-  (( root_bytes >= PRIVIDIUM_HOST_MINIMUM_ROOT_BYTES )) ||
-    prividium_host_fail "a nominal 200 GB root disk is required; found ${root_bytes} usable bytes"
 }
 
 prividium_host_print_install_plan() {

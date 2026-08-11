@@ -103,7 +103,7 @@ sandbox_role_purpose() {
     operator_commit) echo "Submits L1 batch commitments." ;;
     operator_prove) echo "Submits L1 proof transactions." ;;
     operator_execute) echo "Executes settled L1 batches." ;;
-    bridge_sponsor) echo "The only address the customer funds; distributes L1 ETH and funds optional L2 services." ;;
+    bridge_sponsor) echo "The only address the customer funds; distributes L1 ETH and submits the acceptance self-deposit." ;;
     fee_account) echo "Receives protocol fees and does not submit L1 transactions." ;;
     bundler) echo "Optional SSO transaction bundler." ;;
     entrypoint_deployer) echo "Optional one-time EntryPoint deployment wallet." ;;

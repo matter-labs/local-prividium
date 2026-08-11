@@ -18,6 +18,8 @@ unset \
   PRIVIDIUM_HOST_GID \
   PRIVIDIUM_HOST_UID \
   PUBLIC_MANIFEST_PATH \
+  PRIVIDIUM_STATUS_HOST_MARKER \
+  PRIVIDIUM_STATUS_INCOMPLETE_SUMMARY \
   ROLE_REPORT_PATH \
   SANDBOX_ENV_FILE \
   SANDBOX_SECRETS_FILE \
@@ -43,6 +45,8 @@ Commands:
   prepare      Prepare runtime state and simulate protocol deployment
   broadcast    Broadcast the prepared protocol deployment to Sepolia
   deploy       Start and validate the sandbox services
+  verify       Run the confirmation-gated authenticated product smoke
+  status       Show the resumable deployment stage and next action
 
 Evaluation workflow:
   ./cli/prividium host bootstrap
@@ -56,6 +60,7 @@ Evaluation workflow:
   ./cli/prividium prepare
   ./cli/prividium broadcast
   ./cli/prividium deploy
+  ./cli/prividium verify
 
 Run ./cli/prividium <command> --help for command-specific help.
 EOF
@@ -103,6 +108,14 @@ case "$command" in
   deploy)
     source "${PRIVIDIUM_REPO_ROOT}/cli/commands/deploy.sh"
     prividium_deploy "$@"
+    ;;
+  verify)
+    source "${PRIVIDIUM_REPO_ROOT}/cli/commands/verify.sh"
+    prividium_verify "$@"
+    ;;
+  status)
+    source "${PRIVIDIUM_REPO_ROOT}/cli/commands/status.sh"
+    prividium_status "$@"
     ;;
   *)
     echo "Unknown command: ${command}" >&2

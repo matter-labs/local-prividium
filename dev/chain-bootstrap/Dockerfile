@@ -27,6 +27,7 @@ RUN git init /src/era-contracts \
     && git -C /src/era-contracts fetch --depth 1 origin "${PROTOCOL_COMMIT}" \
     && git -C /src/era-contracts checkout --detach FETCH_HEAD \
     && test "$(git -C /src/era-contracts rev-parse HEAD)" = "${PROTOCOL_COMMIT}"
+COPY PrividiumCanaryDeposit.s.sol /src/era-contracts/l1-contracts/deploy-scripts/PrividiumCanaryDeposit.s.sol
 
 ENV PROTOCOL_CONTRACTS_ROOT=/src/era-contracts
 WORKDIR /src/integration
@@ -50,6 +51,7 @@ COPY --from=builder /src/integration/target/release/zk-deployer /usr/local/bin/z
 COPY --from=builder /src/era-contracts /opt/era-contracts
 COPY rpc-capabilities.sh /usr/local/libexec/prividium/rpc-capabilities.sh
 COPY bootstrap.sh /usr/local/bin/prividium-chain-bootstrap
+COPY canary.sh /usr/local/bin/prividium-canary
 
 ENV PROTOCOL_CONTRACTS_ROOT=/opt/era-contracts
 ENV ZK_DEPLOYER_COMMIT=${ZK_DEPLOYER_COMMIT}

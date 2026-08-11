@@ -62,6 +62,10 @@ elif jq -e \
     .assets.protocol_fee_asset == "ETH" and
     .sources.protocol == "e091691063c99a1d0281d6fe42fb0ec4430f3673" and
     .sources.zk_deployer == "16c6a83b4f634609958f347c56549ba19bf9df9b" and
+    .data_availability.mode == "no_da" and
+    .data_availability.type == "validium" and
+    .transaction_filterer.chain_admin_whitelisted == true and
+    .transaction_filterer.deposits_allowed == true and
     .security.proofs == "fake" and
     .security.verifier == "testnet" and
     .security.production_safe == false
@@ -314,6 +318,7 @@ fi
   echo "- L2 chain ID: \`${L2_CHAIN_ID}\`"
   echo "- Chain name: \`${CHAIN_NAME:-Prividium Sandbox}\`"
   echo "- Base token and protocol fee asset: **ETH**"
+  echo "- Data availability: **Stage-0 Validium (NoDA)**"
   echo
   echo "## Public interfaces"
   echo
@@ -349,9 +354,9 @@ fi
   echo "| Capability | State |"
   echo "| --- | --- |"
   echo "| Core Prividium, Explorer, identity, chain, and monitoring | Enabled |"
-  echo "| SSO / EntryPoint / bundler | $([[ "$sso_enabled" == "true" ]] && echo Enabled || echo Disabled) |"
-  echo "| Webhooks | $([[ "$webhook_enabled" == "true" ]] && echo Enabled || echo Disabled) |"
-  echo "| Institutional demo | $([[ "$demo_enabled" == "true" ]] && echo Enabled || echo Disabled) |"
+  echo "| SSO / EntryPoint / bundler | $([[ "$sso_enabled" == "true" ]] && echo 'Unsupported — running outside the happy path' || echo 'Unsupported — disabled') |"
+  echo "| Webhooks | $([[ "$webhook_enabled" == "true" ]] && echo 'Unsupported — running outside the happy path' || echo 'Unsupported — disabled') |"
+  echo "| Institutional demo | $([[ "$demo_enabled" == "true" ]] && echo 'Unsupported — running outside the happy path' || echo 'Unsupported — disabled') |"
   echo
   echo "## On-chain identity"
   echo
@@ -362,6 +367,7 @@ fi
   echo "| Testnet verifier | \`$(jq -r '.l1_contracts.testnet_verifier' "$public_manifest")\` |"
   echo "| Chain diamond | \`$(jq -r '.chain_contracts.diamond' "$public_manifest")\` |"
   echo "| Chain admin | \`$(jq -r '.chain_contracts.chain_admin' "$public_manifest")\` |"
+  echo "| Prividium transaction filterer | \`$(jq -r '.transaction_filterer.address' "$public_manifest")\` |"
   echo
   write_checks
   echo

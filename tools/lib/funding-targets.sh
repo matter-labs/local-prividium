@@ -13,9 +13,10 @@ sandbox_validate_funding_targets() {
   fi
   if ! jq -e '
     type == "object" and
-    (keys | sort) == ["l1_chain_id", "schema_version", "targets_wei"] and
+    (keys | sort) == ["canary_reserve_wei", "l1_chain_id", "schema_version", "targets_wei"] and
     .schema_version == 1 and
     .l1_chain_id == 11155111 and
+    (.canary_reserve_wei | type == "string" and test("^[1-9][0-9]*$")) and
     (.targets_wei | type == "object") and
     (.targets_wei | keys | sort) == [
       "chain_owner",
@@ -33,6 +34,13 @@ sandbox_validate_funding_targets() {
     echo "Funding targets must use the exact six-role Sepolia schema" >&2
     return 1
   fi
+}
+
+sandbox_canary_reserve() {
+  local targets_file="$1"
+
+  jq -er '.canary_reserve_wei | select(type == "string" and test("^[1-9][0-9]*$"))' \
+    "$targets_file"
 }
 
 sandbox_funding_target() {

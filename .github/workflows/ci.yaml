@@ -28,12 +28,15 @@ jobs:
           ./cli/prividium host verify --help >/dev/null
           ./cli/prividium init --help >/dev/null
           ./cli/prividium credentials --help >/dev/null
+          ./cli/prividium status --help >/dev/null
+          ./cli/prividium verify --help >/dev/null
 
       - name: Validate focused deployment UX
         run: |
           tests/host-operator.sh
           tests/host-backend.sh
           tests/input-env.sh
+          tests/status-resume.sh
           tests/skill-discovery.sh
 
       - name: Render and validate every Compose profile

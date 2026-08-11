@@ -226,4 +226,24 @@ if grep -En \
   exit 1
 fi
 
+if ! jq -e '
+  .l1_chain_id == 11155111 and
+  .data_availability.mode == "no_da" and
+  .data_availability.type == "validium" and
+  .data_availability.l2_commitment_scheme == "empty_no_da" and
+  (.data_availability | has("l1_validator")) and
+  (.transaction_filterer | has("address")) and
+  .transaction_filterer.chain_admin_whitelisted == true and
+  .transaction_filterer.deposits_allowed == true and
+  .security.proofs == "fake"
+' deployment/public/manifest.example.json >/dev/null; then
+  echo "Public manifest example must evidence Validium, filterer policy, and fake proofs" >&2
+  exit 1
+fi
+if ! grep -Fq 'da_mode: no_da' dev/chain-bootstrap/bootstrap.sh ||
+   ! grep -Fq 'DeployPrividiumTransactionFilterer.s.sol' dev/chain-bootstrap/bootstrap.sh; then
+  echo "Chain bootstrap must deploy NoDA Validium with the official transaction filterer" >&2
+  exit 1
+fi
+
 echo "Sandbox Compose static validation passed"

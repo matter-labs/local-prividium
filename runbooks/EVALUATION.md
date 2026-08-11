@@ -1,6 +1,6 @@
 # Engineering evaluation and BD handoff
 
-Use this checklist after `./cli/prividium deploy` completes successfully. It
+Use this checklist after `./cli/prividium verify` reports `READY`. It
 keeps the technical evaluation focused on product behavior and produces a
 compact record that an engineering team can share with its BD stakeholders.
 
@@ -18,10 +18,19 @@ Record the repository commit and keep these commit-safe artifacts:
 deployment/public/roles.md
 deployment/public/manifest.json
 deployment/public/deployment-summary.md
+deployment/public/happy-path.json
 ```
 
 Do not attach the SOPS file, age identity, `/etc/prividium/runtime`, private RPC
 URL, passwords, or private keys to an evaluation report.
+
+For the disposable-VPS qualification, record the wall-clock start and finish
+and each human intervention: operator/second-session verification, host install
+approval, DNS or firewall action, pull-only Quay login, funding-wallet top-up
+and transfer approval, protocol broadcast approval, and canary approval. Record
+only the time, action, actor, and outcome—never the credential or secret value.
+`happy-path.json` records the automated product/canary elapsed time;
+the qualification log supplies the full blank-VPS elapsed time.
 
 ## Automated deployment evidence
 
@@ -33,6 +42,9 @@ Confirm the deployment summary reports:
 - `chain-preflight` completed successfully;
 - working user, administration, Explorer, API, and OIDC endpoints;
 - unauthenticated protected RPC access rejected.
+
+Confirm `happy-path.json` reports a generated non-admin OIDC login,
+authenticated RPC, a successful canary receipt, and Explorer indexing.
 
 ## Human evaluation journeys
 
@@ -58,14 +70,12 @@ run through an agent transcript or redirected to a file.
 
 ### Transaction and Explorer
 
-- Submit a low-value authenticated sandbox transaction.
-- Confirm it is accepted by the intended L2 chain.
-- Confirm the Explorer indexes the transaction, address, block, and status.
+- Review the confirmation-gated canary recorded in `happy-path.json`.
+- Confirm it was accepted by the intended L2 chain and indexed by Explorer.
 - Confirm no raw ZKsync OS RPC port is publicly reachable.
 
-### Settlement and monitoring
+### Monitoring
 
-- Observe at least one batch progress through commit, prove, and execute.
 - Confirm the three settlement-operator balances match the public role
   inventory and remain above their configured targets.
 - Access Grafana through an SSH tunnel and confirm Prometheus and the
@@ -94,14 +104,14 @@ Keep the handoff short:
 | Identity result | Administrator/user and access-control observations |
 | Product result | Authenticated API/RPC and application observations |
 | Transaction result | Example transaction and Explorer link |
-| Operational result | Batch settlement and operator-balance observations |
+| Operational result | Service health and operator-balance observations |
 | Integration fit | Expected SSO, webhook, or workflow requirements |
 | Constraints | Single host, fake proofs, testnet verifier, hot keys |
 | Recommendation | Continue, continue with conditions, or stop |
 | Follow-up owners | Customer engineering and BD contacts |
 
-Deferred SSO, webhook, and demo profiles should be listed as future evaluation
-work rather than activated through undocumented commands.
+The unsupported SSO, webhook, and demo profiles should be listed as future
+evaluation work rather than activated through undocumented commands.
 
 ## End of evaluation
 

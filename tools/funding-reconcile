@@ -7,6 +7,7 @@ repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 encrypted_file="${SANDBOX_SECRETS_FILE:-${repo_root}/deployment/secrets/sandbox.enc.env}"
 targets_file="${FUNDING_TARGETS_FILE:-${repo_root}/deployment/funding-targets.json}"
 public_manifest="${PUBLIC_MANIFEST_PATH:-${repo_root}/deployment/public/manifest.json}"
+funding_evidence="${RUNTIME_DIR:-/etc/prividium/runtime}/reports/funding-ready.json"
 from_environment="false"
 check_only="false"
 
@@ -86,6 +87,7 @@ snapshot_pids=()
 signer_dir=""
 signer_keystore=""
 signer_password_file=""
+funding_evidence_tmp=""
 lock_dir="${repo_root}/deployment/secrets/.fund.lock"
 lock_acquired="false"
 mutation_attempted=0
@@ -122,6 +124,9 @@ cleanup() {
   fi
   if [[ -n "$signer_dir" ]]; then
     rmdir "$signer_dir" 2>/dev/null || true
+  fi
+  if [[ -n "$funding_evidence_tmp" ]]; then
+    rm -f -- "$funding_evidence_tmp"
   fi
   if [[ "$lock_acquired" == "true" ]]; then
     rmdir "$lock_dir" 2>/dev/null || true
@@ -476,10 +481,10 @@ load_plan() {
   launch_snapshot_command \
     "${snapshot_dir}/pending-nonce" \
     cast rpc eth_getTransactionCount "$sponsor_address" pending
+  launch_snapshot_command \
+    "${snapshot_dir}/sponsor-balance" \
+    cast balance "$sponsor_address"
   if [[ "$check_only" != "true" ]]; then
-    launch_snapshot_command \
-      "${snapshot_dir}/sponsor-balance" \
-      cast balance "$sponsor_address"
     launch_snapshot_command \
       "${snapshot_dir}/gas-price" \
       cast gas-price
@@ -509,16 +514,20 @@ load_plan() {
       "$role" "$address" "$current" "$target" "$shortfall" >>"$rows_file"
   done
 
+  sponsor_balance=$(<"${snapshot_dir}/sponsor-balance")
+  canary_reserve=$(sandbox_canary_reserve "$targets_file")
+  if ! sponsor_balance=$(decimal_normalize "$sponsor_balance") ||
+     ! canary_reserve=$(decimal_normalize "$canary_reserve"); then
+    funding_failure "Unable to read the funding-wallet balance or canary reserve."
+  fi
+
   if [[ "$check_only" == "true" ]]; then
-    sponsor_balance=0
     gas_price=0
     fee_allowance=0
-    required_sponsor_balance="$total_shortfall"
+    required_sponsor_balance=$(decimal_add "$total_shortfall" "$canary_reserve")
   else
-    sponsor_balance=$(<"${snapshot_dir}/sponsor-balance")
     gas_price=$(<"${snapshot_dir}/gas-price")
-    if ! sponsor_balance=$(decimal_normalize "$sponsor_balance") ||
-       ! gas_price=$(decimal_normalize "$gas_price"); then
+    if ! gas_price=$(decimal_normalize "$gas_price"); then
       funding_failure "Unable to read a numeric funding-wallet balance or Sepolia gas price."
     fi
 
@@ -526,6 +535,7 @@ load_plan() {
     fee_allowance=$(decimal_multiply_small "$fee_allowance" "$recipient_count")
     fee_allowance=$(decimal_multiply_small "$fee_allowance" 2)
     required_sponsor_balance=$(decimal_add "$total_shortfall" "$fee_allowance")
+    required_sponsor_balance=$(decimal_add "$required_sponsor_balance" "$canary_reserve")
   fi
 
   nonce_value=$(<"${snapshot_dir}/latest-nonce")
@@ -576,8 +586,37 @@ print_plan() {
   done <"$rows_file"
   printf "\nTotal to distribute: %s Sepolia ETH\n" "$(format_eth "$total_shortfall")"
   printf "Estimated distribution gas: %s Sepolia ETH\n" "$(format_eth "$fee_allowance")"
+  printf "Reserved for the acceptance canary: %s Sepolia ETH\n" "$(format_eth "$canary_reserve")"
   printf "Required funding-wallet balance: %s Sepolia ETH\n" \
     "$(format_eth "$required_sponsor_balance")"
+}
+
+write_funding_evidence() {
+  local targets_sha256
+
+  [[ "$scope" == "all" && "$check_only" != "true" ]] || return
+  targets_sha256=$(sandbox_sha256 <"$targets_file")
+  mkdir -p "$(dirname "$funding_evidence")"
+  funding_evidence_tmp=$(mktemp "${funding_evidence}.tmp.XXXXXX")
+  jq -n \
+    --arg generated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --argjson l2_chain_id "$L2_CHAIN_ID" \
+    --arg role_set_fingerprint "$expected_fingerprint" \
+    --arg canary_reserve_wei "$canary_reserve" \
+    --arg funding_targets_sha256 "$targets_sha256" \
+    '{
+      schema_version: 1,
+      status: "FUNDED",
+      generated_at: $generated_at,
+      l1_chain_id: 11155111,
+      l2_chain_id: $l2_chain_id,
+      role_set_fingerprint: $role_set_fingerprint,
+      canary_reserve_wei: $canary_reserve_wei,
+      funding_targets_sha256: $funding_targets_sha256
+    }' >"$funding_evidence_tmp"
+  install -m 0600 "$funding_evidence_tmp" "$funding_evidence"
+  rm -f -- "$funding_evidence_tmp"
+  funding_evidence_tmp=""
 }
 
 funding_failure() {
@@ -667,9 +706,17 @@ if [[ "$check_only" == "true" ]]; then
     printf "\n"
     exit 2
   fi
+  if decimal_less_than "$sponsor_balance" "$required_sponsor_balance"; then
+    printf "\nACTION REQUIRED\n"
+    printf "The Sandbox funding wallet is below its acceptance-canary reserve.\n"
+    printf "Run: ./cli/prividium fund\n"
+    exit 2
+  fi
 fi
 
-if [[ "$total_shortfall" == "0" ]]; then
+if [[ "$total_shortfall" == "0" ]] &&
+   ! decimal_less_than "$sponsor_balance" "$required_sponsor_balance"; then
+  write_funding_evidence
   printf "\nNO FUNDING CHANGES REQUIRED\n"
   printf "Funding requirements are already satisfied for %s.\n" "$scope_label"
   if [[ "$scope" == "all" ]]; then
@@ -805,6 +852,10 @@ load_plan
 if [[ "$total_shortfall" != "0" ]]; then
   funding_failure "One or more selected roles remain below their funding target."
 fi
+if decimal_less_than "$sponsor_balance" "$canary_reserve"; then
+  funding_failure "The Sandbox funding wallet fell below its acceptance-canary reserve."
+fi
+write_funding_evidence
 printf "\nFUNDING COMPLETE\n"
 printf "Funding requirements satisfied for %s.\n" "$scope_label"
 if [[ "$scope" == "all" ]]; then

@@ -12,8 +12,7 @@ production network, custody model, or supported public testnet.
 
 Provision a dedicated Ubuntu Server 24.04 LTS amd64 VPS with:
 
-- at least 4 vCPU, 8 GB RAM, and a nominal 200 GB SSD;
-- preferably 8 vCPU and 16 GB RAM;
+- preferably 8 vCPU, 16 GB RAM, and a nominal 200 GB SSD;
 - a public IPv4 address and provider recovery console; and
 - either a non-root passwordless-sudo SSH operator or initial root access.
 
@@ -97,11 +96,12 @@ Assess the dedicated-host boundary:
 ./cli/prividium host preflight
 ```
 
-Preflight blocks below 4 vCPU, approximately 8 GiB nominal RAM, or 190 GB
-usable root capacity. It also checks the OS, architecture, sudo, conflicting
-container/Kubernetes packages and services, reserved listeners, existing
-runtime/containers, and outbound access to Docker and Quay. Eight vCPU and 16
-GiB RAM remain recommendations only.
+Preflight reports the actual capacity and prints a nonblocking notice below
+the recommended 8 vCPU, 16 GB nominal RAM, or 200 GB nominal disk target. SSD
+backing is confirmed with the provider. It still blocks on the OS,
+architecture, sudo, conflicting container/Kubernetes packages and services,
+reserved listeners, existing runtime/containers, and outbound access to Docker
+and Quay.
 
 Review the exact managed boundary:
 
@@ -145,7 +145,7 @@ Do not continue until verification passes.
 
 ## 3. Create the human input file
 
-Create a protected copy of the four-field template:
+Create a protected copy of the input template:
 
 ```bash
 install -m 0600 deployment/input.env.example deployment/input.env
@@ -158,12 +158,15 @@ SANDBOX_DOMAIN=sandbox.example.com
 ACME_EMAIL=platform@example.com
 SEPOLIA_RPC_URL="https://private-archive-sepolia-rpc.example.com"
 SEPOLIA_BROWSER_RPC_URL="https://public-browser-sepolia-rpc.example.com"
+# Optional: L2_CHAIN_ID=1900000001
 ```
 
 `SEPOLIA_RPC_URL` is the private archive-capable Sepolia endpoint. It must
 support historical calls/logs, receipts, and blob-fee behavior. Keep its
 credential out of chat and terminal logs. `SEPOLIA_BROWSER_RPC_URL` must be a
 distinct public HTTPS endpoint that permits browser CORS.
+When `L2_CHAIN_ID` is omitted, initialization generates an ID in
+`1073741824..2147483647`. Supply it only for an approved allocation.
 
 The parser allows blank lines, comments, and fully quoted or unquoted values.
 It rejects missing, duplicate, unknown, malformed, shell-expansion, or escaped
@@ -218,7 +221,9 @@ address the customer funds directly.
 
 Host automation deliberately does not modify networking outside the VPS.
 
-In the provider firewall/security group, apply default-deny inbound rules:
+The CLI does not block on firewall state because these controls are
+human-managed. Strongly recommend applying these default-deny provider rules
+before enabling public DNS:
 
 | Protocol | Port | Source |
 | --- | ---: | --- |
@@ -267,7 +272,8 @@ unset QUAY_USERNAME QUAY_TOKEN
 ```
 
 Do not store the Quay token in `deployment/input.env`, Git, command arguments,
-or an agent transcript.
+or an agent transcript. The credential requires pull access only. This
+workflow never pushes, publishes, or signs an image.
 
 ## 7. Fund protocol identities
 
@@ -290,7 +296,8 @@ for confirmation, and rerun the command.
 Human checkpoint — once the funding wallet has enough ETH, the command shows
 the six current shortfalls. Review them and approve the interactive `[y/N]`
 prompt. It transfers only the shortfalls, waits for receipts, and verifies
-final balances. A completed rerun is a no-op.
+final balances. The requested amount also leaves the generated funding wallet
+with the acceptance-canary reserve. A completed rerun is a no-op.
 
 ## 8. Validate and prepare
 
@@ -310,9 +317,10 @@ Prepare without submitting transactions:
 ./cli/prividium prepare
 ```
 
-Preparation decrypts the protected runtime, builds locked sources, simulates
-the ecosystem/L2 deployment, pulls or builds the default images, and records
-preparation provenance under `/etc/prividium/runtime/chain`.
+Preparation decrypts the protected runtime, builds the locked zk-deployer and
+protocol helper locally, simulates the ecosystem/L2 deployment, pulls the
+existing digest-pinned product images, builds the local balance exporter, and
+records provenance under `/etc/prividium/runtime/chain`. It publishes nothing.
 
 ## 9. Authorize protocol broadcast
 
@@ -363,7 +371,27 @@ https://idp.<domain>/realms/prividium
 Grafana remains on `127.0.0.1:3100` and is accessed through an SSH tunnel.
 Database, Prometheus, Keycloak administration, and raw node RPC are not public.
 
-## 11. Reveal evaluation credentials
+## 11. Confirm the product happy path
+
+Run once without confirmation:
+
+```bash
+./cli/prividium verify
+```
+
+The command proves a generated non-admin OIDC user can call protected RPC,
+then stops before a Sepolia write. After reviewing the displayed generated
+canary address, chain, value, and purpose, authorize that separate action:
+
+```bash
+CONFIRM_CANARY=CANARY_SEPOLIA_<L2_CHAIN_ID> ./cli/prividium verify
+```
+
+The command resumes an existing canary, waits for its authenticated L2 receipt,
+and confirms Explorer indexing. It performs no batch-settlement polling. After
+those checks, `./cli/prividium status --json` reports `READY`.
+
+## 12. Reveal evaluation credentials
 
 Only when an authorized human requests them, run outside the agent transcript:
 
@@ -383,6 +411,7 @@ Retain only these commit-safe records in the evaluation report:
 deployment/public/roles.md
 deployment/public/manifest.json
 deployment/public/deployment-summary.md
+deployment/public/happy-path.json
 ```
 
 Never share the age identity, SOPS file, decrypted runtime, private RPC URL,

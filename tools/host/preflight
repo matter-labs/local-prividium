@@ -11,9 +11,9 @@ Run the read-only local VPS compatibility assessment.
 Usage:
   ./cli/prividium host preflight
 
-The command validates Ubuntu 24.04 amd64, capacity, the local operator,
-dedicated-host assumptions, conflicting packages/services/listeners, existing
-Docker state, and outbound Docker/Quay connectivity. It makes no host changes.
+The command validates Ubuntu 24.04 amd64 and the local operator, reports
+capacity, and checks dedicated-host assumptions, conflicts, existing Docker
+state, and outbound Docker/Quay connectivity. It makes no host changes.
 EOF
 }
 
@@ -40,7 +40,12 @@ memory_kib=$(awk '/^MemTotal:/ {print $2}' /proc/meminfo)
 root_bytes=$(df -B1 --output=size / | awk 'NR == 2 {print $1}')
 [[ "$vcpus" =~ ^[0-9]+$ && "$memory_kib" =~ ^[0-9]+$ && "$root_bytes" =~ ^[0-9]+$ ]] ||
   prividium_host_fail "could not determine VPS capacity"
-prividium_host_assert_capacity "$vcpus" "$memory_kib" "$root_bytes"
+sizing_notices=()
+(( vcpus >= PRIVIDIUM_HOST_TARGET_VCPUS )) || sizing_notices+=("${vcpus} vCPU; target is 8")
+(( memory_kib >= PRIVIDIUM_HOST_TARGET_MEMORY_KIB )) ||
+  sizing_notices+=("$((memory_kib / 1024)) MiB RAM; target is 16 GB nominal")
+(( root_bytes >= PRIVIDIUM_HOST_TARGET_ROOT_BYTES )) ||
+  sizing_notices+=("${root_bytes} root bytes; target is a nominal 200 GB disk")
 
 managed=false
 if [[ -e "$PRIVIDIUM_HOST_MARKER" || -L "$PRIVIDIUM_HOST_MARKER" ]]; then
@@ -124,10 +129,10 @@ printf 'Capacity: %s vCPU, %s MiB RAM, %s root bytes\n' \
   "$vcpus" "$((memory_kib / 1024))" "$root_bytes"
 printf 'Managed:  %s\n' "$managed"
 printf 'Mode:     read-only; no remediation\n\n'
-if (( vcpus < PRIVIDIUM_HOST_RECOMMENDED_VCPUS )); then
-  printf 'Recommendation: 8 vCPU improves preparation, indexing, and catch-up.\n'
+if (( ${#sizing_notices[@]} )); then
+  printf 'SIZING NOTICE — deployment is allowed below the recommended target:\n'
+  printf '  • %s\n' "${sizing_notices[@]}"
+  printf '\n'
 fi
-if (( memory_kib < PRIVIDIUM_HOST_RECOMMENDED_MEMORY_KIB )); then
-  printf 'Recommendation: 16 GiB RAM provides additional startup headroom.\n'
-fi
+printf 'Storage media is not enforced; confirm SSD backing with the VPS provider.\n\n'
 printf 'READ-ONLY HOST PREFLIGHT PASSED.\n'

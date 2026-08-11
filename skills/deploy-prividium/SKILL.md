@@ -23,6 +23,7 @@ skill was loaded implicitly, explain the native invocation and make no changes:
 - Never change sshd, host/provider firewall rules, DNS, or provider resources.
 - Stop before funding transfers and protocol broadcast for explicit human
   authorization.
+- Stop before the acceptance canary for separate explicit human authorization.
 - If broadcast may have started and then failed, preserve all output and
   `/etc/prividium/runtime/chain`; do not rerun or regenerate identities.
 - Do not attempt to migrate or repair an Ansible-prepared or nonblank host.
@@ -31,7 +32,8 @@ skill was loaded implicitly, explain the native invocation and make no changes:
 ## Resume safely
 
 Start every invocation with read-only inspection. Locate the repository root,
-confirm `git status --short`, and inspect existence and metadata only for:
+confirm `git status --short`, run `./cli/prividium status --json`, and inspect
+existence and metadata only for:
 
 ```text
 /etc/prividium/.host-contract-version
@@ -39,12 +41,14 @@ deployment/input.env
 deployment/secrets/age.key
 deployment/secrets/sandbox.enc.env
 deployment/public/roles.md
+/etc/prividium/runtime/reports/funding-ready.json
 /etc/prividium/runtime/chain/out/preparation.json
 deployment/public/manifest.json
 deployment/public/deployment-summary.md
+deployment/public/happy-path.json
 ```
 
-Do not display file contents except the three public Markdown/JSON artifacts.
+Do not display file contents except the four public Markdown/JSON artifacts.
 Run the verification command for the highest apparent stage. Continue from the
 first incomplete stage; do not recreate completed secret or protocol state.
 
@@ -96,6 +100,10 @@ Run in order:
 ./cli/prividium host install --check
 ```
 
+Report any sizing notice, but continue: the 8-vCPU, 16-GB, 200-GB SSD target
+is advisory and must not block deployment. Do not ignore other preflight
+failures.
+
 Summarize the printed managed and excluded boundaries. Obtain explicit user
 approval, then apply without trying to answer the CLI confirmation yourself:
 
@@ -113,7 +121,7 @@ active. Resume from the operator-owned checkout and run:
 
 Do not proceed until verification passes.
 
-## 3. Collect the four human inputs
+## 3. Collect the human inputs
 
 If encrypted configuration does not exist, create the protected input file
 without filling its values:
@@ -122,7 +130,7 @@ without filling its values:
 install -m 0600 deployment/input.env.example deployment/input.env
 ```
 
-Ask the user to edit it directly on the VPS. It contains exactly:
+Ask the user to edit it directly on the VPS. It requires:
 
 ```text
 SANDBOX_DOMAIN
@@ -130,6 +138,10 @@ ACME_EMAIL
 SEPOLIA_RPC_URL
 SEPOLIA_BROWSER_RPC_URL
 ```
+
+It also accepts `L2_CHAIN_ID` in `1073741824..2147483647`. Recommend omitting
+it so initialization generates a high-range ID unless the customer has an
+approved allocation.
 
 Explain that `SEPOLIA_RPC_URL` is the private archive-capable endpoint and must
 not be pasted into chat. The browser RPC must be a distinct public HTTPS
@@ -160,7 +172,7 @@ generated passwords during initialization.
 
 ## 4. Complete external infrastructure
 
-Pause for the customer to configure and verify:
+Strongly recommend that the customer configure and verify:
 
 - Provider firewall/security group: administrative SSH only from approved
   CIDRs, TCP 80/443 and UDP 443 publicly, all other inbound traffic denied.
@@ -168,8 +180,9 @@ Pause for the customer to configure and verify:
   `explorer`, `explorer-api`, and `idp` under the sandbox domain.
 - No public `AAAA` records unless equivalent IPv6 routing and filtering exist.
 
-Do not configure these resources. Later `preflight` and `deploy` verify the
-parts visible from the VPS; the customer remains responsible for an external
+Do not configure these resources. Firewall work is human-controlled and
+nonblocking; record a warning if it is deferred. The six DNS records remain
+required for deployment. The customer remains responsible for an external
 port scan.
 
 ## 5. Authenticate to Quay
@@ -179,7 +192,9 @@ run `docker login quay.io` with `--password-stdin` directly in their SSH
 terminal and report only whether it succeeded. Never ask them to paste the
 token into the agent conversation or put it in `deployment/input.env`. The
 normal application preflight later performs the authoritative pinned-image
-access check without printing registry credentials.
+access check without printing registry credentials. These credentials are
+pull-only. Never publish, push, or sign an image; preparation uses the existing
+digest-pinned images and builds only the two local helper images.
 
 ## 6. Fund the generated identities
 
@@ -193,8 +208,9 @@ Run the read-only explanation and reconciliation:
 If it reports a funding-wallet shortfall, pause while the human sends only the
 requested Sepolia ETH to that displayed wallet. Once funded, require the human
 to run `./cli/prividium fund` directly in their SSH terminal and approve the
-six transfers interactively. Resume only after a rerun reports all targets
-satisfied.
+six transfers interactively. The requested amount includes a reserve in the
+generated funding wallet for the acceptance canary. Resume only after a rerun
+reports all targets and the reserve satisfied.
 
 ## 7. Prepare the protocol
 
@@ -225,7 +241,7 @@ CONFIRM_BROADCAST=BROADCAST_SEPOLIA_<L2_CHAIN_ID> ./cli/prividium broadcast
 Never synthesize approval from the original skill invocation. Verify the
 public manifest exists and matches the prepared L2 chain ID.
 
-## 9. Deploy and verify
+## 9. Deploy the core stack
 
 Run:
 
@@ -235,13 +251,29 @@ Run:
 
 Success requires the generated deployment summary, 14 healthy long-running
 services, successful `chain-preflight`, working HTTPS endpoints, and rejection
-of unauthenticated protected RPC access. Report the public URLs and the three
-commit-safe evidence files. Do not include secret files in the report.
+of unauthenticated protected RPC access. Do not activate the unsupported SSO,
+webhook, or institutional-demo profiles.
 
-On a later invocation, treat a passing deployment summary and live health
-checks as complete. Do not repeat funding, preparation, or broadcast.
+## 10. Authorize the product smoke
 
-## 10. Reveal credentials only on request
+Run `./cli/prividium verify` once without a confirmation value. It must prove a
+generated non-admin OIDC user can call authenticated `eth_chainId`, then block
+before the Sepolia canary. Present the generated canary address, minimal L2
+value, chain ID, and exact confirmation to the user.
+
+After separate explicit authorization, run:
+
+```bash
+CONFIRM_CANARY=CANARY_SEPOLIA_<L2_CHAIN_ID> ./cli/prividium verify
+```
+
+`READY` requires the authenticated canary receipt and Explorer indexing. Do
+not wait for or poll batch settlement. Report
+`deployment/public/happy-path.json`. On later invocations, use
+`./cli/prividium status --json`; never repeat completed funding, protocol
+broadcast, or canary submission.
+
+## 11. Reveal credentials only on request
 
 Do not run the reveal command through an agent tool. When the human explicitly
 asks for credentials, tell them to run this in a private interactive SSH

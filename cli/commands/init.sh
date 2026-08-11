@@ -13,8 +13,9 @@ Options:
   -h, --help         Show this help
 
 The input file must be owned by the current operator with mode 0600 and contain
-exactly SANDBOX_DOMAIN, ACME_EMAIL, SEPOLIA_RPC_URL, and
-SEPOLIA_BROWSER_RPC_URL. It is parsed as data; shell expansion is never run.
+SANDBOX_DOMAIN, ACME_EMAIL, SEPOLIA_RPC_URL, and SEPOLIA_BROWSER_RPC_URL.
+L2_CHAIN_ID is optional; when omitted, a high-range ID is generated. The file
+is parsed as data; shell expansion is never run.
 
 Initialization generates strong random evaluation passwords and stores them
 only in the SOPS-encrypted configuration. Reveal them later with the explicit
@@ -128,6 +129,11 @@ prividium_init() {
   fi
   if [[ ! "$ACME_EMAIL" =~ $email_pattern ]]; then
     prividium_fail "ACME_EMAIL is invalid"
+  fi
+  if [[ -n "${L2_CHAIN_ID:-}" ]] &&
+     { [[ ! "$L2_CHAIN_ID" =~ ^[0-9]+$ ]] ||
+       (( L2_CHAIN_ID < 1073741824 || L2_CHAIN_ID > 2147483647 )); }; then
+    prividium_fail "L2_CHAIN_ID must be in 1073741824..2147483647 when supplied"
   fi
   if [[ ! "$SEPOLIA_RPC_URL" =~ $rpc_url_pattern ||
         ! "$SEPOLIA_BROWSER_RPC_URL" =~ $rpc_url_pattern ]]; then

@@ -17,11 +17,6 @@ expect_rejected \
 expect_rejected \
   prividium_host_assert_platform ubuntu 24.04 Linux aarch64 true
 
-prividium_host_assert_capacity 4 7864320 190000000000
-expect_rejected prividium_host_assert_capacity 3 7864320 190000000000
-expect_rejected prividium_host_assert_capacity 4 7864319 190000000000
-expect_rejected prividium_host_assert_capacity 4 7864320 189999999999
-
 prividium_host_marker_values_are_valid 644 root:root host-contract-v1
 expect_rejected \
   prividium_host_marker_values_are_valid 644 root:root managed-by-ansible

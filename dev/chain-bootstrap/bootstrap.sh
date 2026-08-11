@@ -138,7 +138,7 @@ wallets:
   path: /runtime/chain/wallets.yaml
 chains:
   - chain_id: ${L2_CHAIN_ID}
-    da_mode: rollup
+    da_mode: no_da
 EOF
 chmod 0600 /runtime/chain/intent.yaml
 
@@ -184,6 +184,7 @@ case "$BOOTSTRAP_MODE" in
       --arg state_sha256 "$prepared_state_sha256" \
       --arg manifest_sha256 "$prepared_manifest_sha256" \
       --arg image_id "$PREPARED_IMAGE_ID" \
+      --arg da_mode "no_da" \
       '{
         schema_version: 1,
         generated_at: $generated_at,
@@ -195,7 +196,12 @@ case "$BOOTSTRAP_MODE" in
         },
         chain_state_sha256: $state_sha256,
         prepared_manifest_sha256: $manifest_sha256,
-        chain_bootstrap_image_id: $image_id
+        chain_bootstrap_image_id: $image_id,
+        data_availability_mode: $da_mode,
+        transaction_filterer: {
+          enabled: true,
+          deposits_allowed: true
+        }
       }' >/runtime/chain/out/preparation.json
     chmod 0600 /runtime/chain/out/preparation.json
     echo
@@ -228,6 +234,7 @@ case "$BOOTSTRAP_MODE" in
       --arg state_sha256 "$prepared_state_sha256" \
       --arg manifest_sha256 "$prepared_manifest_sha256" \
       --arg image_id "$PREPARED_IMAGE_ID" \
+      --arg da_mode "no_da" \
       '
         .schema_version == 1 and
         .l1_chain_id == 11155111 and
@@ -239,7 +246,10 @@ case "$BOOTSTRAP_MODE" in
         .sources.protocol == $protocol_commit and
         .chain_state_sha256 == $state_sha256 and
         .prepared_manifest_sha256 == $manifest_sha256 and
-        .chain_bootstrap_image_id == $image_id
+        .chain_bootstrap_image_id == $image_id and
+        .data_availability_mode == $da_mode and
+        .transaction_filterer.enabled == true and
+        .transaction_filterer.deposits_allowed == true
       ' /runtime/chain/out/preparation.json >/dev/null; then
       echo "Prepared execution inputs changed after simulation; rerun ./cli/prividium prepare" >&2
       exit 1
@@ -264,6 +274,49 @@ fi
 
 zk-deployer apply "${common_apply[@]}"
 zk-deployer apply "${common_apply[@]}" --broadcast
+
+bridgehub=$(jq -r '.steps["ecosystem.init"].bridgehub_proxy' /runtime/chain/state.json)
+diamond=$(jq -r --arg key "chain.init.${L2_CHAIN_ID}.prepared" '.steps[$key].diamond_proxy' /runtime/chain/state.json)
+chain_admin=$(jq -r --arg key "chain.init.${L2_CHAIN_ID}.prepared" '.steps[$key].chain_admin' /runtime/chain/state.json)
+chain_owner_address=$(wallet_address "$CHAIN_OWNER_PRIVATE_KEY")
+filterer=$(cast call "$diamond" "getTransactionFilterer()(address)" --rpc-url "$SEPOLIA_RPC_URL")
+if [[ "$filterer" == "$zero_address" ]]; then
+  printf '\nDeploying and registering the Prividium transaction filterer...\n'
+  (
+    cd /opt/era-contracts/l1-contracts
+    forge script \
+      deploy-scripts/DeployPrividiumTransactionFilterer.s.sol:DeployPrividiumTransactionFilterer \
+      --sig "run(address,uint256,bool)" \
+      "$bridgehub" "$L2_CHAIN_ID" true \
+      --rpc-url "$SEPOLIA_RPC_URL" \
+      --private-key "$CHAIN_OWNER_PRIVATE_KEY" \
+      --broadcast \
+      --slow
+  )
+  filterer=$(cast call "$diamond" "getTransactionFilterer()(address)" --rpc-url "$SEPOLIA_RPC_URL")
+else
+  printf '\nReusing the transaction filterer already registered on the chain.\n'
+fi
+
+if [[ "$filterer" == "$zero_address" || ! "$filterer" =~ ^0x[0-9a-fA-F]{40}$ ]]; then
+  echo "The chain has no registered Prividium transaction filterer" >&2
+  exit 1
+fi
+filterer_owner=$(cast call "$filterer" "owner()(address)" --rpc-url "$SEPOLIA_RPC_URL")
+filterer_deposits=$(cast call "$filterer" "depositsAllowed()(bool)" --rpc-url "$SEPOLIA_RPC_URL")
+filterer_admin_whitelisted=$(
+  cast call "$filterer" "whitelistedSenders(address)(bool)" "$chain_admin" --rpc-url "$SEPOLIA_RPC_URL"
+)
+asset_router=$(cast call "$bridgehub" "assetRouter()(address)" --rpc-url "$SEPOLIA_RPC_URL")
+filterer_asset_router=$(cast call "$filterer" "L1_ASSET_ROUTER()(address)" --rpc-url "$SEPOLIA_RPC_URL")
+if [[ "${filterer_owner,,}" != "${chain_owner_address,,}" ||
+      "$filterer_deposits" != "true" ||
+      "$filterer_admin_whitelisted" != "true" ||
+      "${filterer_asset_router,,}" != "${asset_router,,}" ]]; then
+  echo "The registered transaction filterer does not match the approved Prividium policy" >&2
+  exit 1
+fi
+
 zk-deployer server-config \
   --intent /runtime/chain/intent.yaml \
   --state /runtime/chain/state.json \
@@ -305,12 +358,23 @@ name: prividium-sandbox
 EOF
 chmod 0600 /runtime/chain/server.yaml /runtime/chain/sandbox-overrides.yaml /runtime/chain/genesis.json
 
-diamond=$(jq -r --arg key "chain.init.${L2_CHAIN_ID}.prepared" '.steps[$key].diamond_proxy' /runtime/chain/state.json)
-chain_admin=$(jq -r --arg key "chain.init.${L2_CHAIN_ID}.prepared" '.steps[$key].chain_admin' /runtime/chain/state.json)
 supplier=$(jq -r '.steps["ecosystem.init"].bytecodes_supplier' /runtime/chain/state.json)
 governance=$(jq -r '.steps["ecosystem.init"].governance' /runtime/chain/state.json)
 rollup_validator=$(jq -r '.steps["ecosystem.init"].rollup_l1_da_validator' /runtime/chain/state.json)
 blob_validator=$(jq -r '.steps["ecosystem.init"].blobs_zksync_os_l1_da_validator' /runtime/chain/state.json)
+no_da_validator=$(jq -r '.steps["ecosystem.init"].no_da_l1_validator' /runtime/chain/state.json)
+onchain_pricing_mode=$(cast call "$diamond" "getPubdataPricingMode()(uint8)" --rpc-url "$SEPOLIA_RPC_URL")
+mapfile -t onchain_da_pair < <(
+  cast call "$diamond" "getDAValidatorPair()(address,uint8)" --rpc-url "$SEPOLIA_RPC_URL"
+)
+onchain_da_validator="${onchain_da_pair[0]:-}"
+onchain_da_commitment="${onchain_da_pair[1]:-}"
+if [[ "$onchain_pricing_mode" != "1" ||
+      "${onchain_da_validator,,}" != "${no_da_validator,,}" ||
+      "$onchain_da_commitment" != "1" ]]; then
+  echo "The deployed chain is not configured for Stage-0 Validium / NoDA" >&2
+  exit 1
+fi
 protocol_version_raw=$(cast call "$ctm" "protocolVersion()(uint256)" --rpc-url "$SEPOLIA_RPC_URL")
 if [[ "$protocol_version_raw" != "133143986176" ]]; then
   echo "CTM protocol version is ${protocol_version_raw}, expected packed v0.31.0 (133143986176)" >&2
@@ -366,8 +430,11 @@ jq -n \
   --arg governance "$governance" \
   --arg rollup_validator "$rollup_validator" \
   --arg blob_validator "$blob_validator" \
+  --arg no_da_validator "$no_da_validator" \
   --arg diamond "$diamond" \
   --arg chain_admin "$chain_admin" \
+  --arg filterer "$filterer" \
+  --arg filterer_owner "$filterer_owner" \
   --arg testnet_verifier "$testnet_verifier" \
   --argjson is_testnet_verifier "$is_testnet_verifier" \
   --arg validator_timelock "$validator_timelock" \
@@ -401,6 +468,7 @@ jq -n \
       governance: $governance,
       rollup_da_validator: $rollup_validator,
       blob_da_validator: $blob_validator,
+      no_da_validator: $no_da_validator,
       testnet_verifier: $testnet_verifier,
       is_testnet_verifier: $is_testnet_verifier,
       validator_timelock: $validator_timelock
@@ -408,6 +476,18 @@ jq -n \
     chain_contracts: {
       diamond: $diamond,
       chain_admin: $chain_admin
+    },
+    data_availability: {
+      mode: "no_da",
+      type: "validium",
+      l1_validator: $no_da_validator,
+      l2_commitment_scheme: "empty_no_da"
+    },
+    transaction_filterer: {
+      address: $filterer,
+      owner: $filterer_owner,
+      chain_admin_whitelisted: true,
+      deposits_allowed: true
     },
     operator_addresses: {
       commit: $operator_commit,

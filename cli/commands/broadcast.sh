@@ -19,6 +19,8 @@ EOF
 
 prividium_broadcast() {
   local deployer_address
+  local attempt
+  local attempt_tmp
   local expected_confirmation
   local manifest_digest
   local preparation
@@ -67,12 +69,36 @@ prividium_broadcast() {
     "protocol broadcast" sops docker cast jq curl openssl
   prividium_load_runtime_environment
 
+  attempt="${PRIVIDIUM_RUNTIME_DIR}/reports/broadcast-attempt.json"
   prepared_manifest="${PRIVIDIUM_RUNTIME_DIR}/chain/out/manifest.json"
   preparation="${PRIVIDIUM_RUNTIME_DIR}/chain/out/preparation.json"
   if [[ ! -s "$prepared_manifest" || ! -r "$prepared_manifest" ||
         ! -s "$preparation" || ! -r "$preparation" ]]; then
     prividium_fail \
       "prepared protocol artifacts are missing; run ./cli/prividium prepare"
+  fi
+  if [[ -s "${PRIVIDIUM_REPO_ROOT}/deployment/public/manifest.json" ]]; then
+    if jq -e --argjson chain_id "$L2_CHAIN_ID" \
+      '.l1_chain_id == 11155111 and .l2_chain_id == $chain_id' \
+      "${PRIVIDIUM_REPO_ROOT}/deployment/public/manifest.json" >/dev/null; then
+      printf 'Protocol broadcast is already complete for L2 chain %s.\n' "$L2_CHAIN_ID"
+      printf 'Next: ./cli/prividium deploy\n'
+      return
+    fi
+    prividium_fail "the existing public manifest belongs to a different deployment"
+  fi
+  if [[ -e "$attempt" || -L "$attempt" ]]; then
+    if [[ ! -f "$attempt" || ! -s "$attempt" ]] ||
+       ! jq -e --argjson chain_id "$L2_CHAIN_ID" \
+         '.schema_version == 1 and .l2_chain_id == $chain_id and .status == "STARTED"' \
+         "$attempt" >/dev/null; then
+      prividium_fail "broadcast attempt evidence is invalid; preserve runtime state for manual review"
+    fi
+    printf 'BROADCAST REVIEW REQUIRED\n\n' >&2
+    printf 'An approved Sepolia broadcast previously started without producing the public manifest.\n' >&2
+    printf 'Do not rerun broadcast or discard /etc/prividium/runtime/chain.\n' >&2
+    printf 'Inspect protected transaction state and the prior terminal output.\n' >&2
+    return 1
   fi
 
   printf "Prividium sandbox protocol broadcast\n"
@@ -121,6 +147,23 @@ prividium_broadcast() {
     export CONFIRM_BROADCAST="$expected_confirmation"
   fi
 
+  mkdir -p "$(dirname "$attempt")"
+  attempt_tmp=$(mktemp "${attempt}.tmp.XXXXXX")
+  jq -n \
+    --arg started_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --argjson l2_chain_id "$L2_CHAIN_ID" \
+    --arg prepared_manifest_sha256 "$manifest_digest" \
+    '{
+      schema_version: 1,
+      status: "STARTED",
+      started_at: $started_at,
+      l1_chain_id: 11155111,
+      l2_chain_id: $l2_chain_id,
+      prepared_manifest_sha256: $prepared_manifest_sha256
+    }' >"$attempt_tmp"
+  install -m 0600 "$attempt_tmp" "$attempt"
+  rm -f -- "$attempt_tmp"
+
   printf "\nBroadcasting the prepared protocol deployment...\n"
   set +e
   PRIVIDIUM_HOST_UID="$(id -u)" \
@@ -144,6 +187,17 @@ prividium_broadcast() {
     prividium_fail \
       "broadcast returned successfully without a matching public manifest"
   fi
+
+  attempt_tmp=$(mktemp "${attempt}.tmp.XXXXXX")
+  jq \
+    --arg completed_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --arg public_manifest_sha256 "$(prividium_sha256_file "${PRIVIDIUM_REPO_ROOT}/deployment/public/manifest.json")" \
+    '.status = "COMPLETE" |
+     .completed_at = $completed_at |
+     .public_manifest_sha256 = $public_manifest_sha256' \
+    "$attempt" >"$attempt_tmp"
+  install -m 0600 "$attempt_tmp" "$attempt"
+  rm -f -- "$attempt_tmp"
 
   printf "\nBROADCAST COMPLETE\n\n"
   printf "Public protocol manifest  deployment/public/manifest.json\n"

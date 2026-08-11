@@ -21,6 +21,7 @@
     "governance": null,
     "rollup_da_validator": null,
     "blob_da_validator": null,
+    "no_da_validator": null,
     "testnet_verifier": null,
     "is_testnet_verifier": true,
     "validator_timelock": null
@@ -28,6 +29,18 @@
   "chain_contracts": {
     "diamond": null,
     "chain_admin": null
+  },
+  "data_availability": {
+    "mode": "no_da",
+    "type": "validium",
+    "l1_validator": null,
+    "l2_commitment_scheme": "empty_no_da"
+  },
+  "transaction_filterer": {
+    "address": null,
+    "owner": null,
+    "chain_admin_whitelisted": true,
+    "deposits_allowed": true
   },
   "operator_addresses": {
     "commit": null,

@@ -11,12 +11,14 @@ import sys
 from typing import NoReturn
 
 
-EXPECTED = (
+REQUIRED = (
     "SANDBOX_DOMAIN",
     "ACME_EMAIL",
     "SEPOLIA_RPC_URL",
     "SEPOLIA_BROWSER_RPC_URL",
 )
+OPTIONAL = ("L2_CHAIN_ID",)
+EXPECTED = REQUIRED + OPTIONAL
 ASSIGNMENT = re.compile(r"^[ \t]*([A-Z][A-Z0-9_]*)[ \t]*=[ \t]*(.*?)[ \t]*$")
 
 
@@ -81,12 +83,13 @@ def main() -> None:
             fail(f"line {line_number}: duplicate key {name}")
         values[name] = parse_value(raw_value, line_number)
 
-    missing = [name for name in EXPECTED if name not in values]
+    missing = [name for name in REQUIRED if name not in values]
     if missing:
         fail("missing required keys: " + ", ".join(missing))
     output = sys.stdout.buffer
     for name in EXPECTED:
-        output.write(name.encode() + b"\0" + values[name].encode() + b"\0")
+        if name in values:
+            output.write(name.encode() + b"\0" + values[name].encode() + b"\0")
 
 
 if __name__ == "__main__":

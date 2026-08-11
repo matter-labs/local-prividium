@@ -38,14 +38,56 @@ supplier=$(jq -r '.l1_contracts.bytecode_supplier' /public/manifest.json)
 diamond=$(jq -r '.chain_contracts.diamond' /public/manifest.json)
 verifier=$(jq -r '.l1_contracts.testnet_verifier' /public/manifest.json)
 validator_timelock=$(jq -r '.l1_contracts.validator_timelock' /public/manifest.json)
+no_da_validator=$(jq -r '.data_availability.l1_validator' /public/manifest.json)
+filterer=$(jq -r '.transaction_filterer.address' /public/manifest.json)
+filterer_owner=$(jq -r '.transaction_filterer.owner' /public/manifest.json)
+chain_admin=$(jq -r '.chain_contracts.chain_admin' /public/manifest.json)
 
-for address in "$bridgehub" "$ctm" "$supplier" "$diamond" "$verifier" "$validator_timelock"; do
+for address in \
+  "$bridgehub" "$ctm" "$supplier" "$diamond" "$verifier" \
+  "$validator_timelock" "$no_da_validator" "$filterer"; do
   code=$(cast code "$address" --rpc-url "$SEPOLIA_RPC_URL")
   if [[ -z "$code" || "$code" == "0x" ]]; then
     echo "No Sepolia bytecode found at required address ${address}" >&2
     exit 1
   fi
 done
+
+if ! jq -e '
+  .data_availability.mode == "no_da" and
+  .data_availability.type == "validium" and
+  .data_availability.l2_commitment_scheme == "empty_no_da" and
+  .transaction_filterer.chain_admin_whitelisted == true and
+  .transaction_filterer.deposits_allowed == true
+' /public/manifest.json >/dev/null; then
+  echo "Manifest does not describe the approved Stage-0 Validium and filterer policy" >&2
+  exit 1
+fi
+onchain_pricing_mode=$(cast call "$diamond" "getPubdataPricingMode()(uint8)" --rpc-url "$SEPOLIA_RPC_URL")
+mapfile -t onchain_da_pair < <(
+  cast call "$diamond" "getDAValidatorPair()(address,uint8)" --rpc-url "$SEPOLIA_RPC_URL"
+)
+onchain_da_validator="${onchain_da_pair[0]:-}"
+onchain_da_commitment="${onchain_da_pair[1]:-}"
+onchain_filterer=$(cast call "$diamond" "getTransactionFilterer()(address)" --rpc-url "$SEPOLIA_RPC_URL")
+if [[ "$onchain_pricing_mode" != "1" ||
+      "${onchain_da_validator,,}" != "${no_da_validator,,}" ||
+      "$onchain_da_commitment" != "1" ||
+      "${onchain_filterer,,}" != "${filterer,,}" ]]; then
+  echo "On-chain Validium or transaction-filterer configuration differs from the manifest" >&2
+  exit 1
+fi
+actual_filterer_owner=$(cast call "$filterer" "owner()(address)" --rpc-url "$SEPOLIA_RPC_URL")
+deposits_allowed=$(cast call "$filterer" "depositsAllowed()(bool)" --rpc-url "$SEPOLIA_RPC_URL")
+admin_whitelisted=$(
+  cast call "$filterer" "whitelistedSenders(address)(bool)" "$chain_admin" --rpc-url "$SEPOLIA_RPC_URL"
+)
+if [[ "${actual_filterer_owner,,}" != "${filterer_owner,,}" ||
+      "$deposits_allowed" != "true" ||
+      "$admin_whitelisted" != "true" ]]; then
+  echo "On-chain transaction-filterer policy differs from the manifest" >&2
+  exit 1
+fi
 
 registered=$(cast call "$bridgehub" "getZKChain(uint256)(address)" "$L2_CHAIN_ID" --rpc-url "$SEPOLIA_RPC_URL")
 if [[ "${registered,,}" != "${diamond,,}" ]]; then
