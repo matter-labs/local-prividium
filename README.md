@@ -3,6 +3,11 @@
 This repository deploys a persistent, single-VPS Prividium evaluation backed
 by a dedicated ZKsync ecosystem on Ethereum Sepolia.
 
+For the governed customer journey, begin with the
+[enterprise deployment guide](runbooks/ENTERPRISE_DEPLOYMENT.md). The
+[documentation index](runbooks/README.md) routes platform, security,
+deployment, and evaluation teams to their supporting references.
+
 > [!CAUTION]
 > This is not a production deployment or an official public testnet. It uses
 > fake proofs, a testnet verifier, SOPS-managed hot keys, and one host. Never
@@ -10,12 +15,15 @@ by a dedicated ZKsync ecosystem on Ethereum Sepolia.
 
 ## Quick start with an agent
 
-Install and authenticate either Codex CLI or Claude Code before starting. On a
-dedicated, initially blank Ubuntu Server 24.04 amd64 VPS, clone over HTTPS:
+Have the customer engineer prepare a VPS that satisfies
+[the documented prerequisites](runbooks/HOST_CONTRACT.md), then clone over
+HTTPS:
 
 ```bash
 git clone https://github.com/matter-labs/local-prividium.git
 cd local-prividium
+cargo install --path crates/prividium-cli --locked --bin prividiumcli
+prividiumcli --version
 ```
 
 Start the chosen agent from the repository and invoke the deployment skill:
@@ -25,51 +33,44 @@ codex   → $deploy-prividium
 claude  → /deploy-prividium
 ```
 
-The skill resumes safely from existing verified artifacts and drives the
-repository CLI. It pauses when a human must verify access, control an external
-account, handle a credential, fund Sepolia identities, or approve protocol
-transactions.
+During this source-validation phase the CLI is not published. Rust 1.90.0 and
+Cargo must already be available to the Unix user. The command above installs
+`prividiumcli` locally from the locked source in the checkout.
 
-If the provider image initially exposes only `root`, the skill uses the
-constrained `./cli/prividium host operator create` command and stops until a
-second SSH login as the new operator is verified. Continue from a fresh
-operator-owned HTTPS clone; never reuse a checkout under `/root`.
+The skill resumes safely from existing verified artifacts and drives the
+repository CLI. It pauses when a human must control external infrastructure,
+handle a credential, fund Sepolia identities, or approve protocol transactions.
+Host provisioning and policy remain with the customer engineer.
 
 ## Human checkpoints
 
 The agent identifies and verifies these checkpoints in order:
 
-1. Verify a non-root passwordless-sudo operator and reconnect when required.
-2. Reconnect after Docker group membership, rebooting first only when required.
-3. Edit the protected input file directly on the VPS; optionally choose the L2 chain ID.
-4. Configure the strongly recommended provider firewall and six required public DNS records.
-5. Authenticate Docker to Quay with the issued pull-only credential.
-6. Fund the generated Sepolia wallet and approve distribution.
-7. Review and explicitly authorize the prepared Sepolia protocol broadcast.
-8. Review and explicitly authorize the minimal acceptance canary.
-9. Reveal generated evaluation logins only when requested.
+1. Edit the protected input file directly on the VPS; optionally choose the L2 chain ID.
+2. Configure network access and the six required public DNS records.
+3. Authenticate Docker to Quay with the issued pull-only credential.
+4. Fund the generated Sepolia wallet and approve distribution.
+5. Review and explicitly authorize the prepared Sepolia protocol broadcast.
+6. Review and explicitly authorize the minimal acceptance canary.
+7. Reveal generated evaluation logins only when requested.
 
-Provider firewall rules, DNS, Quay credential issuance, agent installation,
-RPC procurement, and Sepolia funding remain human-controlled. Host and provider
-firewall automation is deferred and does not block the CLI, but the documented
-default-deny policy is strongly recommended before public DNS is enabled.
+Host preparation, firewall rules, DNS, Quay credential issuance, agent
+installation, RPC procurement, and Sepolia funding remain human-controlled.
 
-## Supported VPS
+## Host prerequisites
 
-- Ubuntu Server 24.04 LTS, `amd64`, systemd, and a public IPv4 address.
-- Dedicated blank host with a key-authenticated non-root passwordless-sudo
-  operator.
-- Recommended sizing is 8 vCPU, 16 GB RAM, and a nominal 200 GB SSD.
-- Preflight reports lower capacity without blocking deployment; confirm SSD
-  backing with the VPS provider.
-- Provider recovery console or equivalent out-of-band access.
+- Dedicated Linux `amd64` VPS; Ubuntu Server 24.04 LTS is the qualified target.
+- Expected capacity of 8 vCPU, 16 GB RAM, and a nominal 200 GB
+  nonrotational SSD.
+- Docker Engine and Compose v2 available to the deployment user.
+- Rust 1.90.0 with Cargo, Git, age, SOPS, and Foundry `cast`.
+- Protected `/etc/prividium/runtime`, required network access, and six DNS
+  records as described in the setup guide.
 
-The host installer supplies safe Ubuntu upgrades, baseline packages, Chrony,
-unattended security updates without automatic reboot, checksum-pinned SOPS and
-Foundry, Docker Engine, Buildx, Compose, bounded container logs, and protected
-runtime directories.
-
-See [the host contract](runbooks/HOST_CONTRACT.md) for the enforced boundary.
+These capacity figures are planning requirements, not CLI gates. The CLI does
+not provision or audit the OS, accounts, SSH, sudo, firewall, package policy,
+Docker daemon policy, or hardware capacity. See
+[the host prerequisites](runbooks/HOST_CONTRACT.md) for the ownership boundary.
 
 ## CLI workflow
 
@@ -77,29 +78,23 @@ The skill uses these deterministic commands. They remain available as the
 manual fallback documented in [the setup guide](runbooks/SETUP.md):
 
 ```bash
-./cli/prividium host bootstrap
-./cli/prividium host preflight
-./cli/prividium host install --check
-./cli/prividium host install
-# Reconnect, then:
-./cli/prividium host verify
-
-./cli/prividium init
-./cli/prividium fund
-./cli/prividium preflight
-./cli/prividium prepare
-./cli/prividium broadcast
-./cli/prividium deploy
-./cli/prividium verify
+prividiumcli status
+prividiumcli init
+prividiumcli fund
+prividiumcli preflight
+prividiumcli prepare
+prividiumcli broadcast
+prividiumcli deploy
+prividiumcli verify
 ```
 
-- Host commands operate only on the current VPS. Remote inventories are not
-  supported.
 - `init` reads `deployment/input.env`, generates strong evaluation passwords,
-  and creates the SOPS-encrypted configuration and public role inventory.
+  creates the SOPS-encrypted configuration and public role inventory, verifies
+  decryption, and removes the default plaintext input.
 - `fund` reconciles the deployment and settlement identities on Sepolia.
-- `preflight` validates configuration, RPC, registry, DNS, Compose, identities,
-  and funding without changing state.
+- `preflight` validates application prerequisites, configuration, RPC,
+  registry, DNS, Compose, identities, and funding without changing state. It
+  does not assess hardware capacity or host policy.
 - `prepare` builds and simulates the protocol deployment without transactions.
 - `prepare` pulls the existing digest-pinned product images and builds only the
   local chain-bootstrap and operator-balance-exporter helpers. Nothing is
@@ -113,6 +108,11 @@ manual fallback documented in [the setup guide](runbooks/SETUP.md):
   repeating funding and broadcast transactions. Interrupted approved writes
   become manual-review stages instead of retry instructions.
 - `credentials show` is a confirmation-gated, TTY-only credential reveal.
+- `--output json` returns one versioned result envelope on stdout; progress and
+  prompts stay on stderr. Agents should prefer it for control flow and use the
+  stable `outcome`, `stage`, `next_action`, and `error.code` fields.
+  Exit `0` is complete, `2` is an expected action/review checkpoint, `1` is a
+  failure, and `64` is invalid invocation.
 
 ## Human input and generated configuration
 
@@ -186,7 +186,7 @@ for the engineering and BD handoff.
 
 ```text
 .
-├── cli/                             # Customer-facing deployment CLI
+├── crates/prividium-cli/            # Customer-facing Rust control plane
 ├── compose/                         # Compose entrypoint and service modules
 ├── deployment/                      # Input template, runtime reference, and public output
 ├── dev/                             # Container build and runtime assets
@@ -194,11 +194,13 @@ for the engineering and BD handoff.
 ├── skills/deploy-prividium/         # Canonical agent deployment contract
 ├── .agents/skills/                  # Codex discovery link
 ├── .claude/skills/                  # Claude Code discovery link
-├── tools/host/                      # Auditable local VPS host backend
-├── tools/                           # Protocol and deployment helpers
-└── tests/                           # Focused happy-path smoke validation
+├── tools/validate-stack             # Narrow Compose policy check used by CI
+└── tests/                           # Focused agent-skill validation
 ```
 
 `compose/compose.yaml` is the only Compose entrypoint. Component versions,
 source commits, image digests, and retained unsupported profiles are recorded in
 `deployment/versions.lock.yaml`.
+
+The CLI is installed locally from the locked Rust source in the checkout. No
+CLI executable or container image is published by this repository.

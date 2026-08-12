@@ -1,6 +1,7 @@
 # IDEs
 .idea
 .pnpm-store
+/target
 
 # Decrypted secrets and runtime chain artifacts
 deployment/runtime/

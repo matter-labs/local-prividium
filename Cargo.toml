@@ -1,0 +1,13 @@
+[workspace]
+members = ["crates/prividium-cli"]
+resolver = "2"
+
+[workspace.package]
+edition = "2024"
+license = "MIT OR Apache-2.0"
+rust-version = "1.90"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+strip = true

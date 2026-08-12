@@ -251,7 +251,7 @@ case "$BOOTSTRAP_MODE" in
         .transaction_filterer.enabled == true and
         .transaction_filterer.deposits_allowed == true
       ' /runtime/chain/out/preparation.json >/dev/null; then
-      echo "Prepared execution inputs changed after simulation; rerun ./cli/prividium prepare" >&2
+      echo "Prepared execution inputs changed after simulation; rerun prividiumcli prepare" >&2
       exit 1
     fi
     ;;

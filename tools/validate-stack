@@ -14,8 +14,25 @@ trap 'rm -f "$rendered" "$images" "$default_services" "$default_model"' EXIT
 
 cd "$repo_root"
 
-source "${repo_root}/tools/lib/funding-targets.sh"
-sandbox_validate_funding_targets "$funding_targets_file"
+if ! jq -e '
+  type == "object" and
+  (keys | sort) == ["canary_reserve_wei", "l1_chain_id", "schema_version", "targets_wei"] and
+  .schema_version == 1 and
+  .l1_chain_id == 11155111 and
+  (.canary_reserve_wei | type == "string" and test("^[1-9][0-9]*$")) and
+  (.targets_wei | keys | sort) == [
+    "chain_owner",
+    "ecosystem_governor",
+    "l1_deployer",
+    "operator_commit",
+    "operator_execute",
+    "operator_prove"
+  ] and
+  (.targets_wei | all(type == "string" and test("^[1-9][0-9]*$")))
+' "$funding_targets_file" >/dev/null; then
+  echo "Funding targets must use the exact six-role Sepolia schema" >&2
+  exit 1
+fi
 
 compose_modules=(
   platform.yaml

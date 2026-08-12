@@ -13,30 +13,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check shell scripts
+      - name: Install Rust
+        run: rustup toolchain install 1.90.0 --profile minimal --component clippy,rustfmt
+
+      - name: Check Rust CLI
+        run: |
+          cargo +1.90.0 fmt --all --check
+          cargo +1.90.0 clippy --workspace --all-targets --locked -- -D warnings
+          cargo +1.90.0 test --workspace --locked
+
+      - name: Check retained shell assets
         shell: bash
         run: |
           while IFS= read -r -d '' file; do
             if head -n 1 "$file" | grep -Eq '^#!.*bash'; then
               bash -n "$file"
             fi
-          done < <(find cli tools dev tests -type f -print0)
-          ./cli/prividium host operator create --help >/dev/null
-          ./cli/prividium host bootstrap --help >/dev/null
-          ./cli/prividium host preflight --help >/dev/null
-          ./cli/prividium host install --help >/dev/null
-          ./cli/prividium host verify --help >/dev/null
-          ./cli/prividium init --help >/dev/null
-          ./cli/prividium credentials --help >/dev/null
-          ./cli/prividium status --help >/dev/null
-          ./cli/prividium verify --help >/dev/null
+          done < <(find tools dev tests -type f -print0)
 
       - name: Validate focused deployment UX
         run: |
-          tests/host-operator.sh
-          tests/host-backend.sh
-          tests/input-env.sh
-          tests/status-resume.sh
           tests/skill-discovery.sh
 
       - name: Render and validate every Compose profile

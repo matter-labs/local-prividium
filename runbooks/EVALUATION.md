@@ -1,6 +1,6 @@
 # Engineering evaluation and BD handoff
 
-Use this checklist after `./cli/prividium verify` reports `READY`. It
+Use this checklist after `prividiumcli verify` reports `READY`. It
 keeps the technical evaluation focused on product behavior and produces a
 compact record that an engineering team can share with its BD stakeholders.
 
@@ -24,11 +24,11 @@ deployment/public/happy-path.json
 Do not attach the SOPS file, age identity, `/etc/prividium/runtime`, private RPC
 URL, passwords, or private keys to an evaluation report.
 
-For the disposable-VPS qualification, record the wall-clock start and finish
-and each human intervention: operator/second-session verification, host install
-approval, DNS or firewall action, pull-only Quay login, funding-wallet top-up
-and transfer approval, protocol broadcast approval, and canary approval. Record
-only the time, action, actor, and outcome—never the credential or secret value.
+For the disposable-VPS qualification, record the wall-clock start and finish,
+the customer engineer's host-readiness handoff, and each human intervention:
+DNS or network action, pull-only Quay login, funding-wallet top-up and transfer
+approval, protocol broadcast approval, and canary approval. Record only the
+time, action, actor, and outcome—never the credential or secret value.
 `happy-path.json` records the automated product/canary elapsed time;
 the qualification log supplies the full blank-VPS elapsed time.
 
@@ -49,7 +49,7 @@ authenticated RPC, a successful canary receipt, and Explorer indexing.
 ## Human evaluation journeys
 
 An authorized engineer retrieves the generated logins directly from a private
-SSH terminal with `./cli/prividium credentials show`. The command must not be
+SSH terminal with `prividiumcli credentials show`. The command must not be
 run through an agent transcript or redirected to a file.
 
 ### Identity and access

@@ -1,238 +1,99 @@
-# Evaluation VPS host contract
+# Prividium VPS prerequisites
 
-This document defines the supported host boundary for the Prividium Sepolia
-sandbox. It is the acceptance contract for the implemented host automation and
-the customer-controlled network preparation that surrounds it.
+This document defines the handoff between the customer-managed VPS and the
+repository-managed Prividium deployment.
 
-> [!IMPORTANT]
-> The local CLI host backend implements read-only preflight, reviewable
-> installation, and read-only verification. Provider firewall rules and
-> external network verification remain customer actions documented in
-> [SETUP.md](SETUP.md). Host firewall and SSH changes are deferred,
-> nonblocking, and strongly recommended.
+The repository does not provision, repair, harden, upgrade, or audit the host.
+It also does not manage user accounts, SSH, sudo, firewalls, DNS, storage, or
+provider resources. The customer engineer prepares those controls using their
+normal platform and security standards.
 
-## Purpose
+## Qualified target
 
-The sandbox gives a prospective customer engineering team a persistent,
-shareable Prividium evaluation without representing a production topology. It
-uses one customer-controlled VPS, fake proofs, a testnet verifier, hot keys,
-and Ethereum Sepolia.
+- Dedicated Linux `amd64` VPS; Ubuntu Server 24.04 LTS is the qualified target.
+- Expected capacity: 8 vCPU, 16 GB RAM, and a nominal 200 GB nonrotational SSD.
+- Public IPv4 address and control of the intended DNS zone.
+- A deployment user that can run Docker Engine and Docker Compose v2.
+- A real `/etc/prividium/runtime` directory owned by that user with mode `0700`.
 
-The host must be dedicated to this evaluation. Do not use a workstation, a
-shared application server, or a host containing production workloads.
+Capacity is documented for planning and is not measured or enforced by the
+CLI. The provider is the authoritative source for virtual CPU, storage class,
+and disk-media claims.
 
-## Supported host
+## Required tools
 
-The automated path supports exactly:
+The deployment user must have these commands available:
 
-- Ubuntu Server 24.04 LTS;
-- Linux `amd64`;
-- one VPS with a public IPv4 address;
-- a non-root, key-authenticated SSH account with passwordless `sudo`;
-- a recommended target of 8 vCPU, 16 GB RAM, and a nominal 200 GB SSD;
-- permission to continue below that sizing target after preflight reports the
-  actual capacity; SSD backing is confirmed from the provider plan rather than
-  enforced from virtual block-device metadata;
-- a provider recovery console or equivalent out-of-band access;
-- a conventional systemd installation;
-- Docker Engine with Docker Compose v2.
+```text
+git
+rustc 1.90.0
+cargo
+docker
+docker compose v2
+age
+age-keygen
+sops
+cast
+```
 
-Other Linux distributions are outside the supported evaluation path.
+The CLI is built from the checkout. Its first invocation requires access to
+the Rust crate registry. Docker must already be running and usable by the
+deployment user without an agent changing account or daemon policy.
 
-The customer is responsible for the VPS account, provider billing, public IP,
-DNS zone, SSH keys, recovery console, and any provider-level firewall.
+## Required connectivity
 
-## Network contract
+Outbound DNS and HTTPS must reach:
 
-The provider firewall must implement this inbound policy:
+- GitHub and the Rust crate registry;
+- Docker Hub and Quay;
+- Chainlist; and
+- the configured private and browser Sepolia RPC endpoints.
 
-| Protocol | Port | Source | Purpose |
-| --- | ---: | --- | --- |
-| TCP | Customer-selected SSH port | Customer-approved CIDRs | Administration |
-| TCP | 80 | Any | ACME and HTTP-to-HTTPS handling |
-| TCP | 443 | Any | Public HTTPS interfaces |
-| UDP | 443 | Any | Caddy HTTP/3 |
-| TCP | 3100 | Loopback only | Grafana through an SSH tunnel |
+The application expects public TCP 80/443 and UDP 443 plus the customer's
+chosen administrative SSH access. These services must remain private:
 
-All other inbound traffic is denied. PostgreSQL, Keycloak administration,
-Prometheus, Grafana, raw ZKsync OS RPC, and container-internal service ports
-must not be reachable from an external network.
+- PostgreSQL;
+- Prometheus;
+- Keycloak administration;
+- Grafana, which binds to `127.0.0.1:3100`; and
+- raw ZKsync OS RPC.
 
-A future host-firewall layer should mirror this policy, but it is not part of
-the current evaluation installer. It must not be added as an ad-hoc UFW step
-because Docker manages its own packet-filtering rules.
+The customer decides how to implement and verify this policy across provider
+and host controls. The CLI neither changes nor asserts firewall state.
 
-The current Compose model publishes UDP 443. Removing HTTP/3 in a future
-profile must remove both the Compose publication and the corresponding
-firewall allowance.
+## Required DNS
 
-IPv6 must be either:
+Six public IPv4 `A` records must resolve to the VPS before deployment:
 
-- configured with rules equivalent to IPv4; or
-- explicitly disabled at the provider and host boundary.
+```text
+app.<domain>
+admin.<domain>
+api.<domain>
+explorer.<domain>
+explorer-api.<domain>
+idp.<domain>
+```
 
-An unfiltered public IPv6 address is not an acceptable substitute for an IPv4
-firewall policy.
+Avoid public `AAAA` records unless IPv6 routing and security policy are
+configured end to end.
 
-The evaluation automation does not implement restrictive outbound filtering.
-The host requires outbound DNS and time synchronization, HTTPS access to
-package and image registries, and HTTPS access to the configured Sepolia RPC
-providers.
+## Repository checks
 
-### Docker firewall boundary
+`prividiumcli preflight` checks only what the application needs at deploy
+time: Linux amd64 compatibility, required commands, runtime-directory safety,
+Docker and Compose access, configuration, RPC behavior, chain ID, locked image
+pulls, roles, funding, and DNS resolution.
 
-Docker manages packet-filtering rules for published container ports. Host
-firewall status alone is therefore not proof of the effective exposure.
+It does not inspect or enforce:
 
-Verification must inspect all three layers:
+- CPU, memory, disk size, or storage media;
+- exact Ubuntu packages or services;
+- account, SSH, sudo, or password policy;
+- OS upgrades, time synchronization, or unattended updates;
+- provider or host firewall implementation;
+- Docker daemon logging or package source policy; or
+- recovery-console, backup, monitoring, or retention policy.
 
-1. provider firewall or security group;
-2. host listening sockets;
-3. rendered Compose publications and Docker packet-filtering behavior.
-
-An external scan from outside the VPS is part of acceptance.
-
-## DNS contract
-
-The following `A` records point to the VPS:
-
-| Name | Interface |
-| --- | --- |
-| `app.<domain>` | User application |
-| `admin.<domain>` | Administration |
-| `api.<domain>` | Protected API and RPC |
-| `explorer.<domain>` | Block Explorer |
-| `explorer-api.<domain>` | Explorer API |
-| `idp.<domain>` | OIDC issuer |
-
-Caddy terminates public TLS. Database, monitoring, and raw chain interfaces do
-not receive public DNS records.
-
-## Access and SSH safety
-
-The implemented local installer runs as the current operator and does not
-alter SSH. For an initially root-only image, the separate root-only `host
-operator create` command may install a customer-selected public-key source for
-a locked-password operator. It does not change sshd, disable root access, or
-activate a firewall, and requires a human to verify a second SSH connection
-before continuing. The customer-selected SSH port and allowed source CIDRs
-remain explicit inputs for the deferred SSH/firewall milestone.
-
-SSH changes follow two stages:
-
-1. create and verify the intended operator access without removing the current
-   access path;
-2. harden SSH only after a new connection succeeds and recovery access is
-   confirmed.
-
-The automation must never infer a safe source CIDR from an active SSH session.
-Allowing SSH from `0.0.0.0/0` or `::/0` requires an explicit customer
-acknowledgement.
-
-Before activating a default-deny firewall, the automation must:
-
-- install the intended SSH allow rule;
-- schedule a timed, recoverable firewall rollback where supported;
-- retain the current SSH connection;
-- verify a second connection through the intended rule;
-- cancel the rollback only after verification succeeds.
-
-## Filesystem and credentials
-
-The deployment user owns the protected runtime:
-
-| Path | Expected protection |
-| --- | --- |
-| `/etc/prividium` | Not writable by unprivileged users |
-| `/etc/prividium/.host-contract-version` | Root-owned, mode `0644`; contains `host-contract-v1` |
-| `/etc/prividium/runtime` | Deployment user, mode `0700` |
-| `/etc/prividium/runtime/sandbox.env` | Deployment user, mode `0600` |
-| `deployment/secrets/age.key` | Deployment user, mode `0600`, Gitignored |
-| Docker registry credential file | Deployment user, mode `0600` |
-
-The host backend must not receive or manage:
-
-- Quay passwords or tokens;
-- SOPS age identities;
-- Sepolia RPC credentials;
-- protocol private keys;
-- generated user passwords;
-- decrypted runtime configuration.
-
-Quay credentials are supplied separately by Matter Labs DevOps. They are
-pull-only, repository-scoped where supported, and time-limited or revoked at
-the end of the evaluation. Authentication uses `docker login --password-stdin`
-and must not appear in Git, the human input file, command arguments, CLI
-output, or agent transcripts.
-No workflow step publishes, pushes, or signs an image. Product and supporting
-images are pulled by locked digest; only the chain-bootstrap and balance
-exporter helpers are built locally.
-
-## Host security baseline
-
-The supported baseline includes:
-
-- current security updates and configured unattended security updates, with
-  automatic reboot disabled and a required-reboot warning;
-- synchronized system time;
-- key-based SSH access;
-- default-deny inbound filtering;
-- no unexpected public listeners;
-- Docker and Compose from an approved installation source;
-- bounded Docker container log growth;
-- protected deployment directories;
-- no swap, kernel, or filesystem tuning without a measured requirement;
-- no Kubernetes, K3s, Helm, or Flux installation;
-- no production keys, production assets, or mainnet configuration.
-
-SSH policy changes beyond the safe staged flow are not an implicit side effect
-of installing the sandbox.
-
-## Ownership boundaries
-
-| Concern | Owner |
-| --- | --- |
-| VPS, provider firewall, SSH keys, DNS, recovery console | Customer |
-| Pull-only Quay credential issuance and revocation | Matter Labs DevOps |
-| Host validation, packages, tools, and Docker | Local CLI host backend |
-| Encrypted configuration, identities, funding, deployment | Prividium CLI |
-| Docker services and persistent volumes | Compose deployment |
-| Evaluation access and eventual cleanup | Customer evaluation team |
-| Production architecture and hardening | Joint production engagement |
-
-## Acceptance criteria
-
-A host satisfies this contract when:
-
-- read-only preflight identifies no blocking host issues;
-- a configuration plan is reviewed before any mutation;
-- applying the same host configuration twice is idempotent;
-- the host survives a reboot with SSH and Docker available;
-- only the approved public ports are reachable externally;
-- Grafana is reachable only through loopback or an SSH tunnel;
-- the complete Compose model renders successfully;
-- protected files and directories have the required ownership and modes;
-- Quay authentication succeeds without exposing the credential;
-- `./cli/prividium preflight` passes after initialization and funding;
-- the generated deployment summary reports healthy public interfaces;
-- `./cli/prividium verify` records authenticated RPC, a successful canary
-  receipt, and Explorer indexing.
-
-## Non-goals
-
-This contract does not provide:
-
-- high availability or multi-host orchestration;
-- Kubernetes parity with production;
-- production proof generation or verifier settings;
-- a production key-management or custody design;
-- production backup, disaster recovery, SIEM, compliance, or SRE controls;
-- automated cloud-provider provisioning;
-- a guarantee for hosts that already contain unrelated workloads.
-
-Those topics belong to the production deployment engagement after the
-evaluation.
-
-Existing Ansible-prepared hosts, remote inventories, and migrations are not
-part of this contract. Recreate the disposable VPS and use the local
-`host-contract-v1` workflow.
+If an application prerequisite is missing, the CLI reports it and asks the
+engineer to satisfy this document before rerunning `preflight`. It does not
+attempt host remediation.

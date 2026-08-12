@@ -1,42 +1,52 @@
 ---
 name: deploy-prividium
-description: Deploy and verify the single-VPS Prividium Sepolia evaluation stack from a repository checkout. Use when a customer asks to prepare a blank Ubuntu 24.04 VPS, continue an interrupted evaluation deployment, identify the next human checkpoint, or verify that the Prividium sandbox is ready.
+description: Deploy and verify the single-VPS Prividium Sepolia evaluation stack from a prepared repository checkout. Use when a customer asks to deploy, resume, identify the next human checkpoint, or verify that the Prividium sandbox is ready.
 ---
 
 # Deploy Prividium
 
-Drive the supported evaluation workflow through `./cli/prividium`. Do not
-invent package, Docker, protocol, or recovery commands when a CLI stage exists.
+Drive the evaluation through `prividiumcli`. For every command the agent
+executes, add `--output json`, preserve stdout, and branch only on `outcome`,
+`stage`, `next_action`, and `error.code`. Progress and prompts use stderr. The
+human-only `credentials show` command is the sole exception.
 
-Run this workflow only after the user explicitly invokes the skill. If this
-skill was loaded implicitly, explain the native invocation and make no changes:
+Exit `2` is an expected human-action or manual-review checkpoint. Exit `1` is
+failed validation and exit `64` is agent misuse.
+
+Run this workflow only after the user explicitly invokes the skill. If loaded
+implicitly, explain the native invocation and make no changes:
 
 - Codex: `$deploy-prividium`
 - Claude Code: `/deploy-prividium`
 
 ## Safety boundary
 
-- Support only a dedicated, initially blank Ubuntu Server 24.04 amd64 VPS.
-- Treat this as a single-host, fake-proof Sepolia evaluation, never production.
-- Never print, read into chat, or copy the private RPC value, Quay token, age
-  identity, encrypted/decrypted environment, passwords, or private keys.
-- Never change sshd, host/provider firewall rules, DNS, or provider resources.
+- Support the single-host, fake-proof Sepolia evaluation, never production.
+- Treat the host as customer-managed. Never install packages, create users,
+  modify sshd or sudo, change Docker daemon policy, configure firewalls or DNS,
+  or create provider resources.
+- Never print or copy into chat the private RPC value, Quay token, age identity,
+  encrypted or decrypted environment, passwords, or private keys.
 - Stop before funding transfers and protocol broadcast for explicit human
   authorization.
 - Stop before the acceptance canary for separate explicit human authorization.
 - If broadcast may have started and then failed, preserve all output and
   `/etc/prividium/runtime/chain`; do not rerun or regenerate identities.
-- Do not attempt to migrate or repair an Ansible-prepared or nonblank host.
-  Recommend recreating the disposable VPS.
+- Never publish, push, or sign images.
 
 ## Resume safely
 
 Start every invocation with read-only inspection. Locate the repository root,
-confirm `git status --short`, run `./cli/prividium status --json`, and inspect
-existence and metadata only for:
+confirm `git status --short`, and verify Rust 1.90.0 and Cargo are available.
+Then run:
+
+```bash
+prividiumcli --output json status
+```
+
+Inspect existence and metadata only for:
 
 ```text
-/etc/prividium/.host-contract-version
 deployment/input.env
 deployment/secrets/age.key
 deployment/secrets/sandbox.enc.env
@@ -48,83 +58,40 @@ deployment/public/deployment-summary.md
 deployment/public/happy-path.json
 ```
 
-Do not display file contents except the four public Markdown/JSON artifacts.
-Run the verification command for the highest apparent stage. Continue from the
-first incomplete stage; do not recreate completed secret or protocol state.
+Do not display file contents except the four public Markdown or JSON artifacts.
+Continue from the first incomplete stage. Do not recreate completed secret or
+protocol state.
 
 ## Present human checkpoints
 
-For every pause, state all five items concisely:
+For every pause, state:
 
 1. Why the person must act.
 2. The exact action or command.
 3. How success is verified.
-4. What value is sensitive and must stay out of chat.
-5. Resume by invoking this skill again.
+4. What is sensitive and must stay out of chat.
+5. That the user should reinvoke this skill to resume.
 
 Do not claim progress past a checkpoint until its verification passes.
 
-## 1. Establish the operator
+## 1. Confirm the host handoff
 
-Check `id -u`, Ubuntu release, and architecture.
+Read `runbooks/HOST_CONTRACT.md`. The host engineer is expected to supply the
+documented Linux amd64 environment, tools, Docker access, protected runtime
+directory, connectivity, and DNS control before deployment begins.
 
-If already running as a normal passwordless-sudo operator, continue with host
-bootstrap.
+The expected 8-vCPU, 16-GB, and nominal 200-GB nonrotational SSD capacity is
+documented but not inspected or enforced. Do not invent capacity, SSH, sudo,
+package, service, firewall, or OS-hardening checks.
 
-If running as root, use the constrained repository command. Never choose an
-SSH key source silently. Prefer the current provider-installed authorized-keys
-file when it exists, after explaining that restrictions are preserved:
+If the source-installed CLI, required tool, Docker access, or runtime directory
+is unavailable, stop and report the specific prerequisite from
+`runbooks/HOST_CONTRACT.md`. The engineer owns remediation; do not perform it.
 
-```bash
-./cli/prividium host operator create --copy-current-authorized-keys --yes
-```
+## 2. Collect the human inputs
 
-Otherwise have the user provide a public key through `--public-key-file`.
-Never request or accept a private key. Then stop at this checkpoint:
-
-- Keep the root session open.
-- Open a second SSH session as `prividium`.
-- Run `sudo -n true` in that second session.
-- Clone the repository over HTTPS into the operator's home; do not reuse the
-  checkout under `/root`.
-- Start the chosen agent from the operator-owned checkout and reinvoke this
-  skill.
-
-## 2. Prepare and verify the host
-
-Run in order:
-
-```bash
-./cli/prividium host bootstrap
-./cli/prividium host preflight
-./cli/prividium host install --check
-```
-
-Report any sizing notice, but continue: the 8-vCPU, 16-GB, 200-GB SSD target
-is advisory and must not block deployment. Do not ignore other preflight
-failures.
-
-Summarize the printed managed and excluded boundaries. Obtain explicit user
-approval, then apply without trying to answer the CLI confirmation yourself:
-
-```bash
-./cli/prividium host install --yes
-```
-
-Stop after installation. Tell the user to reboot first only when
-`reboot_required=true`; otherwise reconnect SSH so Docker group membership is
-active. Resume from the operator-owned checkout and run:
-
-```bash
-./cli/prividium host verify
-```
-
-Do not proceed until verification passes.
-
-## 3. Collect the human inputs
-
-If encrypted configuration does not exist, create the protected input file
-without filling its values:
+If encrypted configuration does not exist, create only the empty protected
+input copy:
 
 ```bash
 install -m 0600 deployment/input.env.example deployment/input.env
@@ -139,149 +106,137 @@ SEPOLIA_RPC_URL
 SEPOLIA_BROWSER_RPC_URL
 ```
 
-It also accepts `L2_CHAIN_ID` in `1073741824..2147483647`. Recommend omitting
-it so initialization generates a high-range ID unless the customer has an
-approved allocation.
+It accepts `L2_CHAIN_ID` in `1073741824..2147483647`. Recommend omission so
+`init` generates a high-range ID unless the customer has an approved
+allocation.
 
-Explain that `SEPOLIA_RPC_URL` is the private archive-capable endpoint and must
-not be pasted into chat. The browser RPC must be a distinct public HTTPS
-endpoint with CORS support.
+Explain that `SEPOLIA_RPC_URL` is private and archive-capable and must not be
+pasted into chat. The browser RPC must be a different public HTTPS endpoint
+with CORS support.
 
-When the user says editing is complete, validate without printing values:
-
-```bash
-tools/parse-input-env deployment/input.env >/dev/null
-```
-
-Then initialize:
+When editing is complete, run:
 
 ```bash
-./cli/prividium init
+prividiumcli --output json init
 ```
 
 Verify that the encrypted environment and age identity are nonempty regular
-files with safe modes and that `deployment/public/roles.md` exists. Only after
-all three checks pass, delete the plaintext input precisely:
+files with safe modes, `deployment/public/roles.md` exists, and the default
+plaintext input is gone. If initialization fails, retain the input for
+correction. Never reveal generated passwords.
 
-```bash
-rm -f -- deployment/input.env
-```
+## 3. Complete external infrastructure
 
-If initialization fails, retain the input file for correction. Never reveal
-generated passwords during initialization.
+The customer must configure:
 
-## 4. Complete external infrastructure
-
-Strongly recommend that the customer configure and verify:
-
-- Provider firewall/security group: administrative SSH only from approved
-  CIDRs, TCP 80/443 and UDP 443 publicly, all other inbound traffic denied.
-- Six public IPv4 `A` records pointing to the VPS: `app`, `admin`, `api`,
+- network policy that permits the documented application and administrative
+  traffic without publishing internal services; and
+- six public IPv4 `A` records pointing to the VPS: `app`, `admin`, `api`,
   `explorer`, `explorer-api`, and `idp` under the sandbox domain.
-- No public `AAAA` records unless equivalent IPv6 routing and filtering exist.
 
-Do not configure these resources. Firewall work is human-controlled and
-nonblocking; record a warning if it is deferred. The six DNS records remain
-required for deployment. The customer remains responsible for an external
-port scan.
+Do not configure or audit provider or host controls. DNS is required for
+deployment. Do not recommend public `AAAA` records unless equivalent IPv6
+routing and filtering are in place.
 
-## 5. Authenticate to Quay
+## 4. Authenticate to Quay
 
-Pause for a pull-only credential issued by Matter Labs DevOps. The human must
-run `docker login quay.io` with `--password-stdin` directly in their SSH
-terminal and report only whether it succeeded. Never ask them to paste the
-token into the agent conversation or put it in `deployment/input.env`. The
-normal application preflight later performs the authoritative pinned-image
-access check without printing registry credentials. These credentials are
-pull-only. Never publish, push, or sign an image; preparation uses the existing
-digest-pinned images and builds only the two local helper images.
+Pause for the pull-only credential supplied by Matter Labs DevOps. The human
+must run `docker login quay.io` with `--password-stdin` directly in a private
+SSH terminal and report only whether it succeeded. Never ask for the token or
+put it in `deployment/input.env`.
 
-## 6. Fund the generated identities
+Application preflight checks access to the digest-pinned images. Preparation
+builds only the local `chain-bootstrap` and `operator-balance-exporter` helper
+images. Never publish, push, or sign an image.
 
-Run the read-only explanation and reconciliation:
-
-```bash
-./cli/prividium fund --list
-./cli/prividium fund
-```
-
-If it reports a funding-wallet shortfall, pause while the human sends only the
-requested Sepolia ETH to that displayed wallet. Once funded, require the human
-to run `./cli/prividium fund` directly in their SSH terminal and approve the
-six transfers interactively. The requested amount includes a reserve in the
-generated funding wallet for the acceptance canary. Resume only after a rerun
-reports all targets and the reserve satisfied.
-
-## 7. Prepare the protocol
+## 5. Fund generated identities
 
 Run:
 
 ```bash
-./cli/prividium preflight
-./cli/prividium prepare
+prividiumcli --output json fund --list
+prividiumcli --output json fund
 ```
 
-Resolve only failures within the documented evaluation boundary. Do not weaken
-DNS, registry, RPC, funding, role, or Compose checks. Confirm preparation
-created `/etc/prividium/runtime/chain/out/preparation.json` before continuing.
+If the funding wallet is short, pause while the human sends only the reported
+Sepolia ETH to the displayed public address. Once funded, require the human to
+run `prividiumcli fund` in their private SSH terminal and approve the six
+transfers interactively. Resume only when reconciliation reports all targets
+and the canary reserve satisfied.
 
-## 8. Authorize and broadcast
-
-Run `./cli/prividium broadcast` non-interactively once to display readiness and
-the required `BROADCAST_SEPOLIA_<L2_CHAIN_ID>` confirmation; it must block
-before transactions. Present the network, L2 chain ID, domain, deployer,
-preparation timestamp, and manifest digest to the user.
-
-After the user explicitly authorizes that exact deployment, run:
-
-```bash
-CONFIRM_BROADCAST=BROADCAST_SEPOLIA_<L2_CHAIN_ID> ./cli/prividium broadcast
-```
-
-Never synthesize approval from the original skill invocation. Verify the
-public manifest exists and matches the prepared L2 chain ID.
-
-## 9. Deploy the core stack
+## 6. Validate and prepare
 
 Run:
 
 ```bash
-./cli/prividium deploy
+prividiumcli --output json preflight
+prividiumcli --output json prepare
+```
+
+`preflight` is the authoritative application-readiness check. Resolve only
+failures inside the documented Prividium boundary. A missing host prerequisite
+belongs to the host engineer. Do not weaken RPC, registry, funding, role,
+runtime, DNS, or Compose checks.
+
+Confirm preparation created
+`/etc/prividium/runtime/chain/out/preparation.json`. Preparation must use
+Stage-0 Validium (`da_mode: no_da`), pull the locked product images, and retain
+the exact locally built zk-deployer helper identity used for simulation.
+
+## 7. Authorize and broadcast
+
+Run `prividiumcli --output json broadcast` once without confirmation. It
+must stop before transactions. Present the network, L2 chain ID, domain,
+deployer, preparation timestamp, and manifest digest.
+
+After explicit authorization of that exact deployment, run:
+
+```bash
+CONFIRM_BROADCAST=BROADCAST_SEPOLIA_<L2_CHAIN_ID> prividiumcli --output json broadcast
+```
+
+Never infer approval from the original skill invocation. Verify that the
+public manifest exists and matches the prepared chain ID.
+
+## 8. Deploy the core stack
+
+Run:
+
+```bash
+prividiumcli --output json deploy
 ```
 
 Success requires the generated deployment summary, 14 healthy long-running
 services, successful `chain-preflight`, working HTTPS endpoints, and rejection
-of unauthenticated protected RPC access. Do not activate the unsupported SSO,
-webhook, or institutional-demo profiles.
+of unauthenticated protected RPC. Do not activate the unsupported SSO, webhook,
+or institutional-demo profiles.
 
-## 10. Authorize the product smoke
+## 9. Authorize the product smoke
 
-Run `./cli/prividium verify` once without a confirmation value. It must prove a
-generated non-admin OIDC user can call authenticated `eth_chainId`, then block
-before the Sepolia canary. Present the generated canary address, minimal L2
-value, chain ID, and exact confirmation to the user.
+Run `prividiumcli --output json verify` once without confirmation. It must
+prove a generated non-admin OIDC user can call authenticated `eth_chainId`, then
+stop before the Sepolia canary. Present the generated canary address, minimal
+value, chain ID, purpose, and exact confirmation.
 
 After separate explicit authorization, run:
 
 ```bash
-CONFIRM_CANARY=CANARY_SEPOLIA_<L2_CHAIN_ID> ./cli/prividium verify
+CONFIRM_CANARY=CANARY_SEPOLIA_<L2_CHAIN_ID> prividiumcli --output json verify
 ```
 
 `READY` requires the authenticated canary receipt and Explorer indexing. Do
 not wait for or poll batch settlement. Report
-`deployment/public/happy-path.json`. On later invocations, use
-`./cli/prividium status --json`; never repeat completed funding, protocol
-broadcast, or canary submission.
+`deployment/public/happy-path.json`. On later invocations, rely on `status` and
+never repeat completed funding, protocol broadcast, or canary submission.
 
-## 11. Reveal credentials only on request
+## 10. Reveal credentials only on request
 
-Do not run the reveal command through an agent tool. When the human explicitly
-asks for credentials, tell them to run this in a private interactive SSH
-terminal outside the agent transcript:
+Do not run credential reveal through an agent tool. When explicitly requested,
+tell the human to run this in a private interactive SSH terminal:
 
 ```bash
-./cli/prividium credentials show
+prividiumcli credentials show
 ```
 
-The command requires `SHOW`, refuses redirected output, and displays only the
-evaluation URLs and three generated logins.
+It requires `SHOW`, refuses redirected output, and displays only the evaluation
+URLs and three generated logins.
