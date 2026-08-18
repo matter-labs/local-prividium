@@ -143,6 +143,7 @@ services:
       # Shared multi-org seed fixture; setup-multi-org-demo.ts reads it at ../../multi-org (→ /multi-org).
       - ./dev/multi-org/seed-multi-org-demo.sql:/multi-org/seed-multi-org-demo.sql:ro
     environment:
+      CI: 'true'
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/prividium_api
       # In-network Keycloak URL the API fetches the acme realm's JWKS from (host port won't resolve here).
       KEYCLOAK_URL: http://keycloak:8080

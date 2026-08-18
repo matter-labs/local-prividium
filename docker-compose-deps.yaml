@@ -304,6 +304,7 @@ services:
       - ./dev/bundler/contracts:/app
       - bridge_funds_node_modules:/app/node_modules # Isolate container's Linux node_modules from host
     environment:
+      CI: 'true'
       L1_RPC_URL: http://l1:5010
       L2_RPC_URL: http://zksyncos:3050
       # Key #3 = bundler executor; Key #0 = auth-server-api deployer
@@ -378,6 +379,7 @@ services:
       - ./dev/sso-setup:/app
       - sso_setup_node_modules:/app/node_modules
     environment:
+      CI: 'true'
       L1_RPC_URL: http://l1:5010
       RPC_URL: http://zksyncos:3050
       CHAIN_ID: '6565'
