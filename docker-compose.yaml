@@ -6,7 +6,7 @@ include:
 
 services:
   admin-panel:
-    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.290.1
+    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.290.2
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -26,7 +26,7 @@ services:
       - '3000:3000'
 
   prividium-api:
-    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.290.1
+    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.290.2
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -51,6 +51,7 @@ services:
       - TARGET_CHAIN_TYPE=zksync-os
       - CORS_ORIGIN=http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:3006,http://localhost:3500
       - DATABASE_URL=postgres://postgres:postgres@postgres:5432/prividium_api
+      - DB_POOL_CONNECTION_TIMEOUT_MS=5000
       - AUTH_METHODS=oidc,crypto_native
       - NODE_ENV=production
       - SIWE_CHAIN_ID=6565
@@ -221,7 +222,7 @@ services:
         condition: service_started
 
   user-panel:
-    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.290.1
+    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.290.2
     platform: linux/amd64
     restart: unless-stopped
     environment:
