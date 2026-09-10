@@ -6,7 +6,7 @@ include:
 
 services:
   admin-panel:
-    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.298.9
+    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.299.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -25,7 +25,7 @@ services:
       - '3000:3000'
 
   prividium-api:
-    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.298.9
+    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.299.0
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -53,7 +53,7 @@ services:
       - DB_POOL_CONNECTION_TIMEOUT_MS=5000
       - AUTH_METHODS=oidc,crypto_native
       - NODE_ENV=production
-      - SIWE_CHAIN_ID=6565
+      - SIWE_CHAIN_ID=506
       - SIWE_VALID_DOMAINS=localhost:3000,localhost:3001,localhost:3006,localhost:3500
       - SIWE_HMAC_SECRET=aaaaaaaa00000000aaaaaaaa00000000aaaaaaaa00000000aaaaaaaa00000000
       - SIWE_CHALLENGE_RATE_LIMIT_COUNT=1000
@@ -165,7 +165,7 @@ services:
       - CORS_ORIGINS=http://localhost:3006,http://localhost:3001,http://localhost:3000
       - DEPLOYER_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
       - RPC_URL=http://zksyncos:3050
-      - CHAIN_1_ID=6565
+      - CHAIN_1_ID=506
       - CHAIN_1_RPC_URL=http://zksyncos:3050
       - PRIVIDIUM_MODE=true
       - PRIVIDIUM_API_URL=http://prividium-api:8000
@@ -189,7 +189,7 @@ services:
     volumes:
       - ./dev/sso-setup/contracts.env:/contracts.env:ro
     environment:
-      - NUXT_PUBLIC_CHAIN_ID=6565
+      - NUXT_PUBLIC_CHAIN_ID=506
       - NUXT_PUBLIC_CHAIN_NAME=Prividium Local
       - NUXT_PUBLIC_CHAIN_RPC_URL=http://localhost:5050
       - NUXT_PUBLIC_AUTH_SERVER_API_URL=http://localhost:3004
@@ -218,7 +218,7 @@ services:
         condition: service_started
 
   user-panel:
-    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.298.9
+    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.299.0
     platform: linux/amd64
     restart: unless-stopped
     environment:

@@ -35,7 +35,7 @@ const SSO_DEPLOYER_PK = (process.env.DEPLOYER_PRIVATE_KEY ??
 
 const L1_RPC = process.env.L1_RPC_URL ?? 'http://l1:5010';
 const L2_RPC = process.env.RPC_URL ?? 'http://zksyncos:3050';
-const CHAIN_ID = Number(process.env.CHAIN_ID ?? '6565');
+const CHAIN_ID = Number(process.env.CHAIN_ID ?? '506');
 const ENTRY_POINT_ADDRESS = (process.env.ENTRY_POINT_ADDRESS ??
     '0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108') as Address;
 
@@ -82,7 +82,11 @@ async function bridgeIfNeeded(deployer: ReturnType<typeof privateKeyToAccount>) 
     const l1Wallet = createWalletClient({ account: deployer, chain: anvil, transport: http(L1_RPC) });
     const client = createViemClient({ l1, l2: l2 as never, l1Wallet });
     const sdk = createViemSdk(client);
-    const handle = await sdk.deposits.create({ token: ETH_ADDRESS, amount: BRIDGE_AMOUNT, to: deployer.address });
+    const handle = await sdk.deposits.create({
+        token: ETH_ADDRESS,
+        amount: BRIDGE_AMOUNT,
+        to: deployer.address
+    });
     await sdk.deposits.wait(handle, { for: 'l2' });
     console.log('Bridge complete');
 }

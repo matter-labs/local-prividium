@@ -7,8 +7,9 @@ import { anvil } from 'viem/chains';
 
 const L1_RPC = process.env.L1_RPC_URL || 'http://localhost:5010';
 const L2_RPC = process.env.L2_RPC_URL || 'http://localhost:5050';
-const BRIDGE_AMOUNT = parseEther(process.env.BRIDGE_AMOUNT || '9000');
-const SKIP_THRESHOLD = parseEther('10');
+const BRIDGE_AMOUNT = parseEther(process.env.BRIDGE_AMOUNT || '5000');
+// v33 genesis pre-funds the rich accounts with 100 ETH; the test suite needs the full bridged amount.
+const SKIP_THRESHOLD = parseEther('1000');
 const POLL_INTERVAL_MS = 250;
 
 // All default rich private keys in anvil (same as RICH_PRIVATE_KEYS in integration tests).

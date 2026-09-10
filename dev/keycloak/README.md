@@ -187,7 +187,7 @@ OIDC_JWT_ISSUER=http://localhost:5080/realms/prividium
 OIDC_ADMIN_SUBS=00000000-0000-0000-0000-000000000001
 
 # Crypto-native (SIWE) authentication configuration
-SIWE_CHAIN_ID=6565
+SIWE_CHAIN_ID=506
 SIWE_VALID_DOMAINS=localhost:3000,localhost:3001
 ```
 
