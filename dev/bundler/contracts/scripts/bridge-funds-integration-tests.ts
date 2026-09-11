@@ -8,8 +8,8 @@ import { anvil } from 'viem/chains';
 const L1_RPC = process.env.L1_RPC_URL || 'http://localhost:5010';
 const L2_RPC = process.env.L2_RPC_URL || 'http://localhost:5050';
 const BRIDGE_AMOUNT = parseEther(process.env.BRIDGE_AMOUNT || '5000');
-// v33 genesis pre-funds the rich accounts with 100 ETH; the test suite needs the full bridged amount.
 const SKIP_THRESHOLD = parseEther('1000');
+const L2_GAS_LIMIT = 2_000_000n;
 const POLL_INTERVAL_MS = 250;
 
 // All default rich private keys in anvil (same as RICH_PRIVATE_KEYS in integration tests).
@@ -64,7 +64,8 @@ async function createDeposit(privateKey: `0x${string}`, index: number) {
     const quote = await sdk.deposits.quote({
         token: ETH_ADDRESS,
         amount: BRIDGE_AMOUNT,
-        to: account.address
+        to: account.address,
+        l2GasLimit: L2_GAS_LIMIT
     });
     log(index, 'Deposit quote:', {
         route: quote.route,
@@ -75,7 +76,8 @@ async function createDeposit(privateKey: `0x${string}`, index: number) {
     const handle = await sdk.deposits.create({
         token: ETH_ADDRESS,
         amount: BRIDGE_AMOUNT,
-        to: account.address
+        to: account.address,
+        l2GasLimit: L2_GAS_LIMIT
     });
     log(index, 'Deposit handle:', {
         l1TxHash: handle.l1TxHash,
@@ -110,8 +112,6 @@ async function waitForL2(entry: { handle: DepositHandle; sdk: ReturnType<typeof 
 async function main() {
     console.log(`Bridging ${formatEther(BRIDGE_AMOUNT)} ETH for ${RICH_PRIVATE_KEYS.length} accounts...`);
 
-    // Create deposits sequentially to avoid L1 bridgehub contract reverts
-    // when multiple deposit txs land in the same block.
     const pending: { handle: DepositHandle; sdk: ReturnType<typeof createViemSdk>; index: number }[] = [];
     for (let i = 0; i < RICH_PRIVATE_KEYS.length; i++) {
         const result = await createDeposit(RICH_PRIVATE_KEYS[i], i);

@@ -42,6 +42,7 @@ const ENTRY_POINT_ADDRESS = (process.env.ENTRY_POINT_ADDRESS ??
 const CONTRACTS_ENV_PATH = path.join(__dirname, '..', 'contracts.env');
 const CONTRACTS_DIR = path.join(__dirname, '..', 'contracts');
 const BRIDGE_AMOUNT = parseEther('10');
+const L2_GAS_LIMIT = 2_000_000n;
 
 // Load contract artifacts from Foundry out/<Name>.sol/<Name>.json structure
 function loadArtifact(name: string): { abi: Abi; bytecode: { object: Hex } } {
@@ -85,7 +86,8 @@ async function bridgeIfNeeded(deployer: ReturnType<typeof privateKeyToAccount>) 
     const handle = await sdk.deposits.create({
         token: ETH_ADDRESS,
         amount: BRIDGE_AMOUNT,
-        to: deployer.address
+        to: deployer.address,
+        l2GasLimit: L2_GAS_LIMIT
     });
     await sdk.deposits.wait(handle, { for: 'l2' });
     console.log('Bridge complete');
