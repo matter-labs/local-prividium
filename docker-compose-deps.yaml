@@ -1,4 +1,4 @@
-name: zksync-prividium-db
+name: zksync-prividium-deps
 
 services:
   postgres:
@@ -61,7 +61,7 @@ services:
       "
 
   zksyncos:
-    image: ghcr.io/matter-labs/zksync-os-server:v0.21.0
+    image: quay.io/matterlabs_enterprise/zksync-os-server:v0.23.2
     restart: unless-stopped
     platform: linux/amd64
     ports:
@@ -75,7 +75,7 @@ services:
     volumes:
       - zksyncos_db:/db
       - ./dev/zksyncos/config.yaml:/app/config/config.yaml:ro
-      - ./dev/zksyncos/genesis.json:/app/local-chains/v30.2/genesis.json:ro
+      - ./dev/zksyncos/genesis.json:/app/config/genesis.json:ro
     depends_on:
       l1:
         condition: service_healthy
@@ -87,7 +87,7 @@ services:
       start_period: 30s
 
   keycloak:
-    image: quay.io/keycloak/keycloak:26.0
+    image: quay.io/keycloak/keycloak:26.7.2
     ports:
       - '5080:8080'
     environment:
@@ -308,7 +308,7 @@ services:
       L2_RPC_URL: http://zksyncos:3050
       # Key #3 = bundler executor; Key #0 = auth-server-api deployer
       PRIVATE_KEYS: '0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba,0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
-      BRIDGE_SPONSOR_PRIVATE_KEY: '0x7726827caac94a7f9e1b160f7ea819f172f7b6f9d2a97f992c38edeab82d4110'
+      BRIDGE_SPONSOR_PRIVATE_KEY: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
     command: sh -c "corepack enable && pnpm install && pnpm tsx scripts/bridge-funds.ts"
     depends_on:
       zksyncos:
@@ -333,7 +333,7 @@ services:
         condition: service_completed_successfully
 
   bundler:
-    image: quay.io/matterlabs_enterprise/prividium-bundler:v1.282.2
+    image: quay.io/matterlabs_enterprise/prividium-bundler:v1.300.2
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -380,7 +380,7 @@ services:
     environment:
       L1_RPC_URL: http://l1:5010
       RPC_URL: http://zksyncos:3050
-      CHAIN_ID: '6565'
+      CHAIN_ID: '506'
     command: sh -c "corepack enable && pnpm install && pnpm tsx scripts/deploy-contracts.ts"
     depends_on:
       entrypoint-deployer:

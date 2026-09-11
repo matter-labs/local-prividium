@@ -6,7 +6,7 @@ include:
 
 services:
   admin-panel:
-    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.282.2
+    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.300.2
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -15,7 +15,6 @@ services:
       - VITE_FAUCET_ENABLED=true
       - VITE_WEBHOOKS_ENABLED=true
       - VITE_TENANTS_ENABLED=false
-      - VITE_TRANSACTION_STATUS_API_ENABLED=true
       - VITE_BRAND_NAME=Prividium™
       - VITE_TOKEN_DEPLOYMENT_ENABLED=true
       - PORT=3000
@@ -26,7 +25,7 @@ services:
       - '3000:3000'
 
   prividium-api:
-    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.282.2
+    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.300.2
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -48,11 +47,13 @@ services:
       - PORT=8000
       - METRICS_PORT=9091
       - SEQUENCER_RPC_URL=http://zksyncos:3050
+      - TARGET_CHAIN_TYPE=zksync-os
       - CORS_ORIGIN=http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:3006,http://localhost:3500
       - DATABASE_URL=postgres://postgres:postgres@postgres:5432/prividium_api
+      - DB_POOL_CONNECTION_TIMEOUT_MS=5000
       - AUTH_METHODS=oidc,crypto_native
       - NODE_ENV=production
-      - SIWE_CHAIN_ID=6565
+      - SIWE_CHAIN_ID=506
       - SIWE_VALID_DOMAINS=localhost:3000,localhost:3001,localhost:3006,localhost:3500
       - SIWE_HMAC_SECRET=aaaaaaaa00000000aaaaaaaa00000000aaaaaaaa00000000aaaaaaaa00000000
       - SIWE_CHALLENGE_RATE_LIMIT_COUNT=1000
@@ -77,13 +78,11 @@ services:
       - DISCLOSURE_METHODS_ENABLED=false
       - BRAND_NAME=Prividium™
       - MULTI_ORG_ENABLED=true
+      - INSECURE_MULTI_ORG_WITHOUT_POLICY_ENABLED=true
       - ORG_ROUTING_BY_DOMAIN=false
-      - TRANSACTION_STATUS_API_ENABLED=true
-      - TRANSACTION_STATUS_RETENTION_SECONDS=1209600
-      - TRANSACTION_STATUS_SWEEP_INTERVAL_SECONDS=3600
-      - TRANSACTION_STATUS_MAX_ROWS=1000000
       - MAX_ORGANIZATIONS=100
       - MAX_WALLETS_PER_USER=100
+      - AUDIT_LOGS_PAGINATION_MAX_ITEMS=10000
       - WEBAUTHN_RP_NAME=ZKsync Prividium
       - WEBAUTHN_RP_ID=localhost
       - WEBAUTHN_ORIGIN=http://localhost:3001,http://localhost:3000
@@ -166,7 +165,7 @@ services:
       - CORS_ORIGINS=http://localhost:3006,http://localhost:3001,http://localhost:3000
       - DEPLOYER_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
       - RPC_URL=http://zksyncos:3050
-      - CHAIN_1_ID=6565
+      - CHAIN_1_ID=506
       - CHAIN_1_RPC_URL=http://zksyncos:3050
       - PRIVIDIUM_MODE=true
       - PRIVIDIUM_API_URL=http://prividium-api:8000
@@ -190,7 +189,7 @@ services:
     volumes:
       - ./dev/sso-setup/contracts.env:/contracts.env:ro
     environment:
-      - NUXT_PUBLIC_CHAIN_ID=6565
+      - NUXT_PUBLIC_CHAIN_ID=506
       - NUXT_PUBLIC_CHAIN_NAME=Prividium Local
       - NUXT_PUBLIC_CHAIN_RPC_URL=http://localhost:5050
       - NUXT_PUBLIC_AUTH_SERVER_API_URL=http://localhost:3004
@@ -219,7 +218,7 @@ services:
         condition: service_started
 
   user-panel:
-    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.282.2
+    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.300.2
     platform: linux/amd64
     restart: unless-stopped
     environment:

@@ -35,13 +35,14 @@ const SSO_DEPLOYER_PK = (process.env.DEPLOYER_PRIVATE_KEY ??
 
 const L1_RPC = process.env.L1_RPC_URL ?? 'http://l1:5010';
 const L2_RPC = process.env.RPC_URL ?? 'http://zksyncos:3050';
-const CHAIN_ID = Number(process.env.CHAIN_ID ?? '6565');
+const CHAIN_ID = Number(process.env.CHAIN_ID ?? '506');
 const ENTRY_POINT_ADDRESS = (process.env.ENTRY_POINT_ADDRESS ??
     '0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108') as Address;
 
 const CONTRACTS_ENV_PATH = path.join(__dirname, '..', 'contracts.env');
 const CONTRACTS_DIR = path.join(__dirname, '..', 'contracts');
 const BRIDGE_AMOUNT = parseEther('10');
+const L2_GAS_LIMIT = 2_000_000n;
 
 // Load contract artifacts from Foundry out/<Name>.sol/<Name>.json structure
 function loadArtifact(name: string): { abi: Abi; bytecode: { object: Hex } } {
@@ -82,7 +83,12 @@ async function bridgeIfNeeded(deployer: ReturnType<typeof privateKeyToAccount>) 
     const l1Wallet = createWalletClient({ account: deployer, chain: anvil, transport: http(L1_RPC) });
     const client = createViemClient({ l1, l2: l2 as never, l1Wallet });
     const sdk = createViemSdk(client);
-    const handle = await sdk.deposits.create({ token: ETH_ADDRESS, amount: BRIDGE_AMOUNT, to: deployer.address });
+    const handle = await sdk.deposits.create({
+        token: ETH_ADDRESS,
+        amount: BRIDGE_AMOUNT,
+        to: deployer.address,
+        l2GasLimit: L2_GAS_LIMIT
+    });
     await sdk.deposits.wait(handle, { for: 'l2' });
     console.log('Bridge complete');
 }
