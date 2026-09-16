@@ -61,7 +61,7 @@ services:
       "
 
   zksyncos:
-    image: quay.io/matterlabs_enterprise/zksync-os-server:v0.23.2
+    image: quay.io/matterlabs_enterprise/zksync-os-server:v0.24.0
     restart: unless-stopped
     platform: linux/amd64
     ports:
