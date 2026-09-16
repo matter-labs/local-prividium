@@ -6,7 +6,7 @@ include:
 
 services:
   admin-panel:
-    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.301.0
+    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.302.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -25,7 +25,7 @@ services:
       - '3000:3000'
 
   prividium-api:
-    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.301.0
+    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.302.0
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -83,6 +83,7 @@ services:
       - MAX_ORGANIZATIONS=100
       - MAX_WALLETS_PER_USER=100
       - AUDIT_LOGS_PAGINATION_MAX_ITEMS=10000
+      - PASSKEY_REGISTRATION_ENABLED=true
       - WEBAUTHN_RP_NAME=ZKsync Prividium
       - WEBAUTHN_RP_ID=localhost
       - WEBAUTHN_ORIGIN=http://localhost:3001,http://localhost:3000
@@ -218,7 +219,7 @@ services:
         condition: service_started
 
   user-panel:
-    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.301.0
+    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.302.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
