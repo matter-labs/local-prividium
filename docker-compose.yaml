@@ -6,7 +6,7 @@ include:
 
 services:
   admin-panel:
-    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.304.3
+    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.304.4
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -25,7 +25,7 @@ services:
       - '3000:3000'
 
   prividium-api:
-    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.304.3
+    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.304.4
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -78,6 +78,7 @@ services:
       - DISCLOSURE_METHODS_ENABLED=false
       - BRAND_NAME=Prividium™
       - MULTI_ORG_ENABLED=true
+      - ALLOW_UMBRELLA_SYSTEM_READS=${ALLOW_UMBRELLA_SYSTEM_READS:-false}
       - INSECURE_MULTI_ORG_WITHOUT_POLICY_ENABLED=true
       - ORG_ROUTING_BY_DOMAIN=false
       - MAX_ORGANIZATIONS=100
@@ -219,7 +220,7 @@ services:
         condition: service_started
 
   user-panel:
-    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.304.3
+    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.304.4
     platform: linux/amd64
     restart: unless-stopped
     environment:
