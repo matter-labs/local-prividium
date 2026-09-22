@@ -50,9 +50,11 @@ multi-org login flow can be exercised end-to-end locally. Where production resol
 subdomain header, local dev selects it with a `?org=<id>` query parameter on the user panel.
 
 The demo organization, its OIDC provider (the `acme` realm) and a pending org admin are seeded automatically when the
-dev stack starts, with `MULTI_ORG_ENABLED` on by default in dev: `pnpm dev` seeds them as part of its database seed
-step, and the fully-dockerized `docker compose` stack seeds them from its own setup container. To re-seed manually from
-the host (`dev/sso-setup` is a standalone project, not a workspace package, so run it with `-C`, not `--filter`):
+dev stack starts with multi-org on: `pnpm dev` seeds them as part of its database seed step, and the fully-dockerized
+`docker compose` stack seeds them from its own setup container. `pnpm dev` defaults `MULTI_ORG_ENABLED` to true only
+when neither the command line nor `open/apps/permissions-api/.env` sets it, and a `.env` copied from `.env.example` sets
+it to `false` — so set it to `true` there, or run `MULTI_ORG_ENABLED=true pnpm dev`. To re-seed manually from the host
+(`dev/sso-setup` is a standalone project, not a workspace package, so run it with `-C`, not `--filter`):
 
 ```bash
 pnpm -C dev/sso-setup setup-multi-org-demo
