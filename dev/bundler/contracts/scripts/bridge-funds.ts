@@ -18,6 +18,7 @@ const BRIDGE_SPONSOR_PK = (process.env.BRIDGE_SPONSOR_PRIVATE_KEY || PRIVATE_KEY
 const L1_RPC = process.env.L1_RPC_URL || 'http://localhost:5010';
 const L2_RPC = process.env.L2_RPC_URL || 'http://localhost:5050';
 const BRIDGE_AMOUNT = parseEther('1000');
+const L2_GAS_LIMIT = 2_000_000n;
 const POLL_INTERVAL_MS = 250;
 
 const log = (...msg) => {
@@ -57,7 +58,8 @@ async function bridgeIfNeeded(deployerPk: `0x${string}`, sponsorPk: `0x${string}
     const quote = await sdk.deposits.quote({
         token: ETH_ADDRESS,
         amount: BRIDGE_AMOUNT,
-        to: deployer.address
+        to: deployer.address,
+        l2GasLimit: L2_GAS_LIMIT
     });
     log('Deposit quote:', {
         route: quote.route,
@@ -68,7 +70,8 @@ async function bridgeIfNeeded(deployerPk: `0x${string}`, sponsorPk: `0x${string}
     const handle = await sdk.deposits.create({
         token: ETH_ADDRESS,
         amount: BRIDGE_AMOUNT,
-        to: deployer.address
+        to: deployer.address,
+        l2GasLimit: L2_GAS_LIMIT
     });
     log('Deposit handle:', {
         l1TxHash: handle.l1TxHash,
