@@ -39,7 +39,7 @@ Required env vars:
 | ---------------------- | -------------------------------------------------------------------- |
 | `RPC_URL`              | `http://zksyncos:3050`                                               |
 | `DEPLOYER_PRIVATE_KEY` | `0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80` |
-| `CHAIN_ID`             | `6565`                                                               |
+| `CHAIN_ID`             | `506`                                                                |
 | `DATABASE_URL`         | `postgres://postgres:postgres@postgres:5432/prividium_api`           |
 
 ### App image (`<registry>/<app>:<tag>`)
@@ -51,7 +51,7 @@ All contract addresses injected at runtime via `NUXT_PUBLIC_*` env vars — no b
 | `NUXT_PUBLIC_PRIVIDIUM_CLIENT_ID`          | `<name>-client`         |
 | `NUXT_PUBLIC_PRIVIDIUM_AUTH_BASE_URL`      | `http://localhost:3001` |
 | `NUXT_PUBLIC_PRIVIDIUM_API_BASE_URL`       | `http://localhost:8000` |
-| `NUXT_PUBLIC_PRIVIDIUM_CHAIN_ID`           | `6565`                  |
+| `NUXT_PUBLIC_PRIVIDIUM_CHAIN_ID`           | `506`                   |
 | `NUXT_PUBLIC_PRIVIDIUM_CHAIN_NAME`         | `Local Prividium`       |
 | `NUXT_PUBLIC_PRIVIDIUM_BLOCK_EXPLORER_URL` | `http://localhost:3010` |
 | `NUXT_PUBLIC_ZKSYNC_SSO_AUTH_SERVER_URL`   | `http://localhost:3006` |
@@ -97,7 +97,7 @@ All contract addresses injected at runtime via `NUXT_PUBLIC_*` env vars — no b
     - ./dev/examples/<name>:/output
   environment:
     RPC_URL: http://zksyncos:3050
-    CHAIN_ID: '6565'
+    CHAIN_ID: '506'
     DEPLOYER_PRIVATE_KEY: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
     DATABASE_URL: postgres://postgres:postgres@postgres:5432/prividium_api
   depends_on:
@@ -135,7 +135,7 @@ All contract addresses injected at runtime via `NUXT_PUBLIC_*` env vars — no b
     NUXT_PUBLIC_PRIVIDIUM_RPC_URL: http://localhost:8000/rpc
     NUXT_PUBLIC_PRIVIDIUM_AUTH_BASE_URL: http://localhost:3001
     NUXT_PUBLIC_PRIVIDIUM_API_BASE_URL: http://localhost:8000
-    NUXT_PUBLIC_PRIVIDIUM_CHAIN_ID: 6565
+    NUXT_PUBLIC_PRIVIDIUM_CHAIN_ID: 506
     NUXT_PUBLIC_PRIVIDIUM_CHAIN_NAME: Local Prividium
     NUXT_PUBLIC_PRIVIDIUM_BLOCK_EXPLORER_URL: http://localhost:3010
     NUXT_PUBLIC_ZKSYNC_SSO_AUTH_SERVER_URL: http://localhost:3006

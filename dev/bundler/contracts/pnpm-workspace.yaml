@@ -3,3 +3,7 @@ allowBuilds:
 
 overrides:
   "ws@>=8.0.0 <8.21.0": ^8.21.0
+
+# Same exclusion as the root workspace: fresh zksync-js releases are consumed the day they ship.
+minimumReleaseAgeExclude:
+  - "@matterlabs/zksync-js"
