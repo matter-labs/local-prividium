@@ -1,7 +1,7 @@
 /**
  * Seeds the multi-org demo organization by applying the shared fixture
  * dev/multi-org/seed-multi-org-demo.sql — the single source of truth for the demo org's rows (the same
- * file native `pnpm dev` seeds via the permissions-api seed-runner). The only environment-dependent value
+ * file native `pnpm dev` seeds via dev/seeds/seed-runner.ts). The only environment-dependent value
  * is the Keycloak base the API fetches JWKS from, supplied here via the `__KEYCLOAK_URL__` placeholder
  * (KEYCLOAK_URL, default the host port; the dockerized stack sets the in-network URL).
  *

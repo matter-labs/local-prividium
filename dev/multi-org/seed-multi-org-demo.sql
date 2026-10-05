@@ -1,6 +1,6 @@
 -- Multi-org demo fixture: the single source of truth for the demo org's rows, applied only when
--- MULTI_ORG_ENABLED is on. Both seed paths run THIS file — native `pnpm dev` (the permissions-api
--- seed-runner) and the dockerized stack (dev/sso-setup/scripts/setup-multi-org-demo.ts) — each
+-- MULTI_ORG_ENABLED is on. Both seed paths run THIS file — native `pnpm dev` (dev/seeds/seed-runner.ts)
+-- and the dockerized stack (dev/sso-setup/scripts/setup-multi-org-demo.ts) — each
 -- substituting `__KEYCLOAK_URL__` for the environment's Keycloak base (host port for native,
 -- in-network for docker). Backs the `?org=acme` login flow: open http://localhost:3001/?org=acme and
 -- sign in as admin@acme.local / password (the first login bootstraps the org admin).

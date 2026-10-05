@@ -1,13 +1,13 @@
 genesis:
-  bridgehub_address: '0xd8f8df05efacd52f28cdf11be22ce3d6ae0fabf7'
-  bytecode_supplier_address: '0x9f3f32ea83c8a1c8e993fd9035d1d077545467ac'
-  genesis_input_path: ./local-chains/v30.2/genesis.json
-  chain_id: 6565
+  bridgehub_address: '0xeee0ad79d27dd6112c9547409fd47c6405201f6f'
+  bytecode_supplier_address: '0xcfeb873e67eff5880550ac5ea7c9d924cf93c9c9'
+  genesis_input_path: /app/config/genesis.json
+  chain_id: 506
 l1_sender:
   pubdata_mode: Blobs
-  operator_commit_sk: '0xafc49c5bb410acc43973d0b6cf638220d3cedc3109a08aefa82cffb4853d4eb4'
-  operator_prove_sk: '0x2b099802815e63d929e07bec5bacd57732c75d5087c5bf6545b095cdc1a1b853'
-  operator_execute_sk: '0xefe771b62e5371edc4401bbf8b7aacddb3ed66abae4e6c901cd546fca50295e8'
+  operator_commit_sk: '0xc78123547577c67de697c0e80911cb913d2be569d182ed2d42bd7cd30851948c'
+  operator_prove_sk: '0x1ed8abac5f8143e0f37cc4da4655cb14c82473c1254da12683956749b0cca5bd'
+  operator_execute_sk: '0x7a2f70531f7ba8a79e74c2be455eb7dfa0526f2e802ab9d7132959f040acafc5'
   poll_interval: 100ms
 l1_watcher:
   poll_interval: 100ms
