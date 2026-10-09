@@ -117,8 +117,11 @@ All contract addresses injected at runtime via `NUXT_PUBLIC_*` env vars — no b
       condition: service_completed_successfully
     prividium-api:
       condition: service_healthy
+    ## REMOVE PUBLIC:START
     sso-permissions-setup:
       condition: service_completed_successfully
+      required: false
+    ## REMOVE PUBLIC:END
 
 <name>:
   profiles: [<name>]

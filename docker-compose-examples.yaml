@@ -50,8 +50,6 @@ services:
         condition: service_completed_successfully
       prividium-api:
         condition: service_healthy
-      sso-permissions-setup:
-        condition: service_completed_successfully
 
   institutional-demo:
     profiles: [institutional-demo]
