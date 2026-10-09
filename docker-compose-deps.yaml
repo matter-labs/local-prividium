@@ -1,5 +1,12 @@
 name: zksync-prividium-deps
 
+# The one-shot deployers' tool image (deployments/stack-tools/Dockerfile): node, pnpm, forge/cast and
+# the deploy scripts' dependencies; the scripts are bind-mounted from dev/. Built from source here;
+# CI points STACK_TOOLS_IMAGE at main's published build when the image inputs are unchanged.
+x-stack-tools: &stack-tools
+  image: quay.io/matterlabs_enterprise/prividium-stack-tools:v1.310.0
+  platform: linux/amd64
+
 services:
   postgres:
     image: postgres:18
@@ -33,35 +40,29 @@ services:
       "
 
   l1:
-    image: ghcr.io/foundry-rs/foundry:v1.5.1
+    image: ghcr.io/foundry-rs/foundry:v1.8.4
     restart: unless-stopped
     volumes:
       - ./dev/zksyncos/l1-state.json.gz:/l1-state.json.gz:ro
+      - ./dev/zksyncos/start-anvil.sh:/start-anvil.sh:ro
       - l1state:/home/foundry/l1state
     entrypoint: ''
     user: 'root'
     ports:
       - '5010:5010'
     healthcheck:
-      test: ['CMD-SHELL', 'cast chain-id -r http://localhost:5010']
+      test: ['CMD', 'bash', '/start-anvil.sh', 'healthcheck', '5010']
       interval: 10s
       timeout: 5s
       retries: 5
-    command: |
-      bash -c "
-      if [[ ! -f /home/foundry/l1state/state.json ]]; then
-        gzip -dc /l1-state.json.gz > /home/foundry/l1state/state.json;
-      fi
-      # zksync-os-server bisects L1 history with historical eth_call on every startup, so it
-      # only restarts cleanly while anvil's snapshot window (~500 in-memory + this cap) still
-      # reaches back to the seed-era blocks: with 512 that is ~2-4h of chain uptime. Past that,
-      # zksyncos panic-loops with BlockOutOfRangeError until the l1state and zksyncos_db
-      # volumes are wiped together. Raising the cap extends the window at ~24MB/snapshot.
-      exec anvil --state=/home/foundry/l1state/state.json --state-interval 60 --preserve-historical-states --max-persisted-states 512 --port 5010 --host 0.0.0.0 --block-time 12 --mixed-mining --slots-in-an-epoch 10
-      "
+    # zksync-os-server bisects L1 history on every boot; past this snapshot cap (~2-4h uptime) it
+    # panic-loops with BlockOutOfRangeError until the l1state and zksyncos_db volumes are wiped together.
+    command: >-
+      bash /start-anvil.sh 5010 --state=/home/foundry/l1state/state.json --state-interval 60
+      --preserve-historical-states --max-persisted-states 512 --block-time 12 --mixed-mining --slots-in-an-epoch 10
 
   zksyncos:
-    image: quay.io/matterlabs_enterprise/zksync-os-server:v0.24.2
+    image: quay.io/matterlabs_enterprise/zksync-os-server:v0.24.3
     restart: unless-stopped
     platform: linux/amd64
     ports:
@@ -298,95 +299,23 @@ services:
       - '127.0.0.1:8081:8081'
 
   bridge-funds:
-    image: node:22-slim
-    working_dir: /app
+    <<: *stack-tools
+    working_dir: /opt/stack-tools/contracts/src
     volumes:
-      - ./dev/bundler/contracts:/app
-      - bridge_funds_node_modules:/app/node_modules # Isolate container's Linux node_modules from host
+      - ./dev/bundler/contracts:/opt/stack-tools/contracts/src
+    tmpfs:
+      - /opt/stack-tools/contracts/src/node_modules # Hides a host install; imports resolve to the image's ../node_modules
     environment:
       L1_RPC_URL: http://l1:5010
       L2_RPC_URL: http://zksyncos:3050
       # Key #3 = bundler executor; Key #0 = auth-server-api deployer
       PRIVATE_KEYS: '0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba,0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
       BRIDGE_SPONSOR_PRIVATE_KEY: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
-    command: sh -c "corepack enable && pnpm install && pnpm tsx scripts/bridge-funds.ts"
+    command: tsx scripts/bridge-funds.ts
     depends_on:
       zksyncos:
         condition: service_healthy
 
-  entrypoint-deployer:
-    image: ghcr.io/foundry-rs/foundry:v1.5.1
-    entrypoint: ''
-    user: ${ENTRYPOINT_DEPLOYER_USER:-root}
-    volumes:
-      - ./dev/bundler/contracts/entrypoint:/app
-    working_dir: /app
-    extra_hosts:
-      - 'host.docker.internal:host-gateway'
-    environment:
-      RPC_URL: http://zksyncos:3050
-      PRIVATE_KEY: '0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba'
-    command: >
-      sh -c "forge soldeer install && ./script/deploy.sh"
-    depends_on:
-      bridge-funds:
-        condition: service_completed_successfully
-
-  bundler:
-    image: quay.io/matterlabs_enterprise/prividium-bundler:v1.309.0
-    platform: linux/amd64
-    restart: unless-stopped
-    environment:
-      BUNDLER_PORT: '4337'
-      SEQUENCER_RPC_URL: 'http://zksyncos:3050'
-      BUNDLER_EXECUTOR_PRIVATE_KEYS: '0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba'
-      BUNDLER_UTILITY_PRIVATE_KEY: '0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba'
-      BUNDLER_ENTRYPOINTS: '0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108'
-      BUNDLER_MIN_BALANCE: '0'
-      BUNDLER_NETWORK_NAME: 'local'
-      BUNDLER_LOG_LEVEL: 'info'
-    depends_on:
-      entrypoint-deployer:
-        condition: service_completed_successfully
-
-  # ─── SSO infrastructure ──────────────────────────────────────────────────
-  # Extracts the contract artifacts shipped inside sso-auth-server-api into
-  # ./dev/sso-setup/contracts so sso-contracts-deployer can read them.
-  contracts-extractor:
-    image: ghcr.io/matter-labs/sso-auth-server-api:996fbd7-1780065236920
-    platform: linux/amd64
-    volumes:
-      - ./dev/sso-setup/contracts:/output
-    entrypoint: ''
-    command: >
-      sh -c "
-        if [ -d /prod/auth-server-api/contracts ]; then
-          cp -r /prod/auth-server-api/contracts/. /output/
-          echo 'Extracted contract artifacts from image'
-        elif [ -f /output/WebAuthnValidator.sol/WebAuthnValidator.json ]; then
-          echo 'Using static contract artifacts (image predates Dockerfile update)'
-        else
-          echo 'ERROR: No contract artifacts found. Either rebuild the sso-auth-server-api image or restore dev/sso-setup/contracts/ from git.'
-          exit 1
-        fi
-      "
-
-  sso-contracts-deployer:
-    image: node:22-slim
-    working_dir: /app
-    volumes:
-      - ./dev/sso-setup:/app
-      - sso_setup_node_modules:/app/node_modules
-    environment:
-      L1_RPC_URL: http://l1:5010
-      RPC_URL: http://zksyncos:3050
-      CHAIN_ID: '506'
-    command: sh -c "corepack enable && pnpm install && pnpm tsx scripts/deploy-contracts.ts"
-    depends_on:
-      entrypoint-deployer:
-        condition: service_completed_successfully
-      contracts-extractor:
-        condition: service_completed_successfully
 
 volumes:
   postgres:
@@ -395,5 +324,3 @@ volumes:
   prometheus_data:
   grafana_data:
   zksync_webhook_db_data:
-  bridge_funds_node_modules:
-  sso_setup_node_modules:

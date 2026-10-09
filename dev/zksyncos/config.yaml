@@ -1,6 +1,6 @@
 genesis:
-  bridgehub_address: '0xeee0ad79d27dd6112c9547409fd47c6405201f6f'
-  bytecode_supplier_address: '0xcfeb873e67eff5880550ac5ea7c9d924cf93c9c9'
+  bridgehub_address: '0x24420e672f8711a040e8ab27ac33026d277a7e2d'
+  bytecode_supplier_address: '0xba5e24dcab189e2b523d58f9d770763e9b92c4a8'
   genesis_input_path: /app/config/genesis.json
   chain_id: 506
 l1_sender:

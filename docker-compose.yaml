@@ -4,9 +4,10 @@ include:
   - docker-compose-deps.yaml
   - docker-compose-examples.yaml
 
+
 services:
   admin-panel:
-    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.309.0
+    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.310.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -25,7 +26,7 @@ services:
       - '3000:3000'
 
   prividium-api:
-    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.309.0
+    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.310.0
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -33,16 +34,9 @@ services:
         condition: service_started
       zksyncos:
         condition: service_started
-      bundler:
-        condition: service_started
-      sso-contracts-deployer:
-        condition: service_completed_successfully
     ports:
       - '8000:8000'
       - '9091:9091'
-    env_file:
-      - path: ./dev/sso-setup/contracts.env
-        required: false
     environment:
       - PORT=8000
       - METRICS_PORT=9091
@@ -50,6 +44,8 @@ services:
       - TARGET_CHAIN_TYPE=zksync-os
       - CORS_ORIGIN=http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:3006,http://localhost:3500
       - DATABASE_URL=postgres://postgres:postgres@postgres:5432/prividium_api
+      - DATABASE_AUTH=password
+      - DATABASE_MAX_CONNECTION_LIFETIME_SECONDS=1800
       - DB_POOL_CONNECTION_TIMEOUT_MS=5000
       - AUTH_METHODS=oidc,crypto_native
       - NODE_ENV=production
@@ -92,8 +88,6 @@ services:
       - WEBAUTHN_REQUIRE_USER_VERIFICATION=false
       - WEBAUTHN_AUTHENTICATOR_ATTACHMENT=platform
       - EXTRA_PUBLIC_CODE_ADDRESSES=0x36615Cf349d7F6344891B1e7CA7C72883F5dc049
-      - BUNDLER_ENABLED=true
-      - BUNDLER_RPC_URL=http://bundler:4337
       - WEBHOOK_API_URL=http://zksync-webhook-service:8081
       - ASSET_INSTRUCTION_PROXY_SECRET=${ASSET_INSTRUCTION_PROXY_SECRET:-}
       - ASSET_INSTRUCTION_DEPLOYMENT=${ASSET_INSTRUCTION_DEPLOYMENT:-}
@@ -140,92 +134,9 @@ services:
   # Opt-in asset instruction service; executes against a contract implementing IControlledAsset.
   # Kept out of the public compose until the image is published to Quay for customers.
 
-  sso-permissions-setup:
-    image: node:22-slim
-    working_dir: /app
-    volumes:
-      - ./dev/sso-setup:/app
-      - sso_setup_node_modules:/app/node_modules
-      # Shared multi-org seed fixture; setup-multi-org-demo.ts reads it at ../../multi-org (→ /multi-org).
-      - ./dev/multi-org/seed-multi-org-demo.sql:/multi-org/seed-multi-org-demo.sql:ro
-    environment:
-      DATABASE_URL: postgres://postgres:postgres@postgres:5432/prividium_api
-      # In-network Keycloak URL the API fetches the acme realm's JWKS from (host port won't resolve here).
-      KEYCLOAK_URL: http://keycloak:8080
-    command: sh -c "corepack enable && pnpm install && pnpm tsx scripts/setup-permissions.ts && pnpm tsx scripts/setup-multi-org-demo.ts"
-    depends_on:
-      sso-contracts-deployer:
-        condition: service_completed_successfully
-      prividium-api:
-        condition: service_healthy
-
-  auth-server-api:
-    image: ghcr.io/matter-labs/sso-auth-server-api:996fbd7-1780065236920
-    platform: linux/amd64
-    restart: unless-stopped
-    ports:
-      - '3004:3004'
-    volumes:
-      - ./dev/sso-setup/contracts.env:/contracts.env:ro
-    environment:
-      - PORT=3004
-      - CORS_ORIGINS=http://localhost:3006,http://localhost:3001,http://localhost:3000
-      - DEPLOYER_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
-      - RPC_URL=http://zksyncos:3050
-      - CHAIN_1_ID=506
-      - CHAIN_1_RPC_URL=http://zksyncos:3050
-      - PRIVIDIUM_MODE=true
-      - PRIVIDIUM_API_URL=http://prividium-api:8000
-      - PRIVIDIUM_ADMIN_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
-      - PRIVIDIUM_TEMPLATE_KEY=sso-smart-account
-      - SSO_AUTH_SERVER_BASE_URL=http://localhost:3006
-    entrypoint:
-      - /bin/sh
-      - -c
-      - 'set -a && . /contracts.env && set +a && exec node --experimental-wasm-modules /prod/auth-server-api/dist/index.js'
-    depends_on:
-      sso-permissions-setup:
-        condition: service_completed_successfully
-
-  auth-server:
-    image: ghcr.io/matter-labs/sso-auth-server:996fbd7-1780065232708
-    platform: linux/amd64
-    restart: unless-stopped
-    ports:
-      - '3006:3000'
-    volumes:
-      - ./dev/sso-setup/contracts.env:/contracts.env:ro
-    environment:
-      - NUXT_PUBLIC_CHAIN_ID=506
-      - NUXT_PUBLIC_CHAIN_NAME=Prividium Local
-      - NUXT_PUBLIC_CHAIN_RPC_URL=http://localhost:5050
-      - NUXT_PUBLIC_AUTH_SERVER_API_URL=http://localhost:3004
-      - NUXT_PUBLIC_PRIVIDIUM_MODE=true
-      - NUXT_PUBLIC_PRIVIDIUM_AUTH_BASE_URL=http://localhost:3001
-      - NUXT_PUBLIC_PRIVIDIUM_API_BASE_URL=http://localhost:8000
-      - NUXT_PUBLIC_SALT_SERVICE_URL=https://sso-oidc.zksync.dev/salt
-      - NUXT_PUBLIC_ZKEY_URL=https://sso-oidc.zksync.dev/zkey
-      - NUXT_PUBLIC_WITNESS_WASM_URL=https://sso-oidc.zksync.dev/witness
-    command: >
-      sh -c "
-        export NUXT_PUBLIC_PRIVIDIUM_CLIENT_ID=$$(grep '^SSO_CLIENT_ID=' /contracts.env 2>/dev/null | cut -d= -f2 | tr -d '[:space:]') ;
-        export NUXT_PUBLIC_GUARDIAN_EXECUTOR_ADDRESS=$$(grep '^SSO_GUARDIAN_EXECUTOR=' /contracts.env 2>/dev/null | cut -d= -f2 | tr -d '[:space:]') ;
-        export NUXT_PUBLIC_FACTORY_ADDRESS=$$(grep '^SSO_FACTORY=' /contracts.env 2>/dev/null | cut -d= -f2 | tr -d '[:space:]') ;
-        export NUXT_PUBLIC_EOA_VALIDATOR_ADDRESS=$$(grep '^SSO_EOA_VALIDATOR=' /contracts.env 2>/dev/null | cut -d= -f2 | tr -d '[:space:]') ;
-        export NUXT_PUBLIC_WEBAUTHN_VALIDATOR_ADDRESS=$$(grep '^SSO_WEBAUTHN_VALIDATOR=' /contracts.env 2>/dev/null | cut -d= -f2 | tr -d '[:space:]') ;
-        export NUXT_PUBLIC_SESSION_VALIDATOR_ADDRESS=$$(grep '^SSO_SESSION_VALIDATOR=' /contracts.env 2>/dev/null | cut -d= -f2 | tr -d '[:space:]') ;
-        export NUXT_PUBLIC_BEACON_ADDRESS=$$(grep '^SSO_BEACON=' /contracts.env 2>/dev/null | cut -d= -f2 | tr -d '[:space:]') ;
-        export NUXT_PUBLIC_ENTRY_POINT_ADDRESS=$$(grep '^SSO_ENTRY_POINT=' /contracts.env 2>/dev/null | cut -d= -f2 | tr -d '[:space:]') ;
-        exec node .output/server/index.mjs
-      "
-    depends_on:
-      sso-permissions-setup:
-        condition: service_completed_successfully
-      auth-server-api:
-        condition: service_started
 
   user-panel:
-    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.309.0
+    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.310.0
     platform: linux/amd64
     restart: unless-stopped
     environment:

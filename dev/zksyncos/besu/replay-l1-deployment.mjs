@@ -46,42 +46,37 @@ function accessListRlp(list) {
 }
 
 function serialize(tx) {
-    const kind = Object.keys(tx)[0];
-    const f = tx[kind];
-    if (kind === 'Legacy') {
-        // dump stores parity; rebuild EIP-155 v
-        const parity = BigInt(f.yParity ?? f.v);
-        const v = f.chainId ? BigInt(f.chainId) * 2n + 35n + parity : 27n + parity;
+    if (tx.type === '0x0') {
         return `0x${rlp([
-            scalar(f.nonce),
-            scalar(f.gasPrice),
-            scalar(f.gas),
-            bytes(f.to),
-            scalar(f.value),
-            bytes(f.input),
-            scalar(`0x${v.toString(16)}`),
-            scalar(f.r),
-            scalar(f.s)
+            scalar(tx.nonce),
+            scalar(tx.gasPrice),
+            scalar(tx.gas),
+            bytes(tx.to),
+            scalar(tx.value),
+            bytes(tx.input),
+            scalar(tx.v),
+            scalar(tx.r),
+            scalar(tx.s)
         ]).toString('hex')}`;
     }
-    if (kind === 'EIP1559') {
+    if (tx.type === '0x2') {
         const body = rlp([
-            scalar(f.chainId),
-            scalar(f.nonce),
-            scalar(f.maxPriorityFeePerGas),
-            scalar(f.maxFeePerGas),
-            scalar(f.gas),
-            bytes(f.to),
-            scalar(f.value),
-            bytes(f.input),
-            accessListRlp(f.accessList),
-            scalar(f.yParity ?? f.v),
-            scalar(f.r),
-            scalar(f.s)
+            scalar(tx.chainId),
+            scalar(tx.nonce),
+            scalar(tx.maxPriorityFeePerGas),
+            scalar(tx.maxFeePerGas),
+            scalar(tx.gas),
+            bytes(tx.to),
+            scalar(tx.value),
+            bytes(tx.input),
+            accessListRlp(tx.accessList),
+            scalar(tx.yParity ?? tx.v),
+            scalar(tx.r),
+            scalar(tx.s)
         ]);
         return `0x02${body.toString('hex')}`;
     }
-    throw new Error(`unsupported tx kind: ${kind}`);
+    throw new Error(`unsupported tx type: ${tx.type}`);
 }
 
 let rpcId = 0;
