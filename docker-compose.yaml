@@ -7,7 +7,7 @@ include:
 
 services:
   admin-panel:
-    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.310.0
+    image: quay.io/matterlabs_enterprise/prividium-adminv2:v1.311.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -17,6 +17,7 @@ services:
       - VITE_WEBHOOKS_ENABLED=true
       - VITE_TENANTS_ENABLED=false
       - VITE_BRAND_NAME=Prividium™
+      - VITE_OPERATOR_NAME=Matter Labs
       - VITE_TOKEN_DEPLOYMENT_ENABLED=true
       - PORT=3000
     depends_on:
@@ -26,7 +27,7 @@ services:
       - '3000:3000'
 
   prividium-api:
-    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.310.0
+    image: quay.io/matterlabs_enterprise/prividium-permissions-api:v1.311.0
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -51,7 +52,7 @@ services:
       - NODE_ENV=production
       - SIWE_CHAIN_ID=506
       - SIWE_VALID_DOMAINS=localhost:3000,localhost:3001,localhost:3006,localhost:3500
-      - SIWE_HMAC_SECRET=aaaaaaaa00000000aaaaaaaa00000000aaaaaaaa00000000aaaaaaaa00000000
+      - SIWE_HMAC_SECRET=444556204f4e4c5920686d61632073656372657420646f206e6f742075736521
       - SIWE_CHALLENGE_RATE_LIMIT_COUNT=1000
       - SIWE_CHALLENGE_RATE_LIMIT_WINDOW_SECONDS=300
       - SIWE_CONSUMED_NONCE_TTL_SECONDS=600
@@ -106,6 +107,8 @@ services:
       - RATE_LIMIT_M2M_MAX=1000
       - RATE_LIMIT_WINDOW_MS=60000
       - CRYPTO_NATIVE_ADMIN_WALLETS=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+      - CRYPTO_NATIVE_LOGIN_ALLOWLIST=${CRYPTO_NATIVE_LOGIN_ALLOWLIST:-}
+      - WATCHDOG_WALLETS=${WATCHDOG_WALLETS:-}
       - PRIVIDIUM_API_URL=http://localhost:8000
       - CHAIN_NAME=Prividium™ Local
       - NATIVE_TOKEN_NAME=Ether
@@ -136,7 +139,7 @@ services:
 
 
   user-panel:
-    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.310.0
+    image: quay.io/matterlabs_enterprise/prividium-user-panel:v1.311.0
     platform: linux/amd64
     restart: unless-stopped
     environment:
