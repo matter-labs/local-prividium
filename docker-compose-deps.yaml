@@ -4,7 +4,7 @@ name: zksync-prividium-deps
 # the deploy scripts' dependencies; the scripts are bind-mounted from dev/. Built from source here;
 # CI points STACK_TOOLS_IMAGE at main's published build when the image inputs are unchanged.
 x-stack-tools: &stack-tools
-  image: quay.io/matterlabs_enterprise/prividium-stack-tools:v1.311.0
+  image: quay.io/matterlabs_enterprise/prividium-stack-tools:v1.311.1
   platform: linux/amd64
 
 services:
@@ -62,7 +62,7 @@ services:
       --preserve-historical-states --max-persisted-states 512 --block-time 12 --mixed-mining --slots-in-an-epoch 10
 
   zksyncos:
-    image: quay.io/matterlabs_enterprise/zksync-os-server:v0.24.3
+    image: quay.io/matterlabs_enterprise/zksync-os-server:v0.24.5
     restart: unless-stopped
     platform: linux/amd64
     ports:
