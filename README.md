@@ -7,44 +7,58 @@ A Docker Compose setup for running a complete Prividium™ cluster locally.
 > The stack uses localhost-only URLs, seeded test users, test wallets, fixed development keys, and local infrastructure such as Anvil and a local zkSync OS instance.
 > Do not reuse these Docker Compose files, credentials, keys, or defaults against any shared or public network.
 
+## Prerequisites
+
+- Docker with Docker Compose 2.24 or later (Docker Desktop or Docker Engine).
+- At least 4 GB of memory and 15 GB of free disk for Docker. The images take about 10 GB.
+- These host ports free: `3000`, `3001`, `3002`, `3010`, `3100`, `5010`, `5050`, `5080`, `5432`, `8000`, `8080`, `8081`, `9090`, `9091`.
+- Registry credentials for `quay.io`, provided by the Matter Labs team.
+
+The Prividium images are built for `linux/amd64`. On Apple Silicon, Docker Desktop runs them under emulation. Turn on
+**Use Rosetta for x86_64/amd64 emulation** in Docker Desktop settings for the best speed.
+
 ## Getting Started
 
-> [!WARNING]
-> Request access to our private docker registry before continuing with these instructions.
+Run every command from the root of this repository.
 
-### 1. Authenticate with Docker Registry
+### 1. Log in to the registry
 
-Authenticate with the information provided by the MatterLabs team:
+Use the username and password provided by the Matter Labs team:
 
 ```bash
 DOCKER_USERNAME=matterlabs_enterprise+your_username
-DOCKER_PASSWORD=super_secret_provided_by_matterlabs
-
-docker login -u=$DOCKER_USERNAME -p=$DOCKER_PASSWORD quay.io
+echo 'password_provided_by_matterlabs' | docker login quay.io -u "$DOCKER_USERNAME" --password-stdin
 ```
 
-### 2. Start the Cluster
-
-Start dependencies and core services:
+### 2. Start the cluster
 
 ```bash
-docker compose -f docker-compose.yaml up -d
+docker compose up -d
 ```
 
-### 3. Seed Wallet-Based Users w/ Funds
+The first start pulls all images and takes a few minutes.
 
-To add a few wallet-based authenticated users with pre-configured test wallets, run the seed script against the
-database:
+### 3. Wait for the API
 
 ```bash
-docker exec -i zksync-prividium-postgres-1 psql -U postgres -d prividium_api < dev/wallet-auth/seed-wallet-auth.sql
+until curl -sf http://localhost:8000/health > /dev/null; do echo "Waiting for the Prividium API..."; sleep 5; done
 ```
 
-### 4. Access the Application
+The API runs its database migrations on startup. The next step needs them.
 
-Open the User Panel at **http://localhost:3001**
+### 4. Seed test users and services
 
-Click **"Sign in with Keycloak"** and use one of the pre-configured test users:
+```bash
+cat dev/wallet-auth/seed-wallet-auth.sql dev/service-auth/seed-webhook-service.sql \
+  | docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U postgres -d prividium_api
+```
+
+This adds the wallet-based test users and the account the webhook service uses to read the chain. It is safe to run
+again.
+
+### 5. Open the User Panel
+
+Open **http://localhost:3001** and click **Sign in with Keycloak**. Use one of these test users:
 
 | Email           | Password |
 |-----------------|----------|
@@ -52,7 +66,7 @@ Click **"Sign in with Keycloak"** and use one of the pre-configured test users:
 | user1@local.dev | password |
 | user2@local.dev | password |
 
-Alternatively, you can login via a MetaMask wallet by clicking **"Sign in with Wallet"**:
+You can also click **Sign in with Wallet** and use MetaMask with one of these test wallets:
 
 | Wallet Address                           | Private Key                                                        |
 |------------------------------------------|--------------------------------------------------------------------|
@@ -60,56 +74,18 @@ Alternatively, you can login via a MetaMask wallet by clicking **"Sign in with W
 | 70997970C51812dc3A010C7d01b50e0d17dc79C8 | 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d |
 | 3C44CdDdB6a900fa2b585dd299e03d12FA4293BC | 0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a |
 
-These wallet-based test users all have wallet addresses derived from the standard test mnemonic:
+These wallets come from the standard test mnemonic:
 
 ```
 test test test test test test test test test test test junk
 ```
 
-### 5. Access Other Applications
+The first wallet (`f39F…2266`) is an admin.
 
-Login to the Admin Panel at **http://localhost:3000**
+### 6. Open the other applications
 
-Login to the Block Explorer at **http://localhost:3010** (Be sure a wallet is associated with the user's account)
-
----
-
-## Example Demo Apps
-
-Optional demo apps can be started alongside the core stack using Docker Compose profiles:
-
-| Profile              | Port | Description                                   | Instructions                               |
-| -------------------- | ---- | --------------------------------------------- | ------------------------------------------ |
-| `institutional-demo` | 3500 | Intraday Repo lending demo with ERC-20 tokens | [Demo guide](./institutional-demo/DEMO.md) |
-
-```bash
-# Intraday Repo Demo
-docker compose --profile institutional-demo up -d
-```
-
----
-
-## Architecture
-
-### Core Services (`docker-compose.yaml`)
-
-The main Prividium™ application services:
-
-- **Admin Panel** - Administrative interface for managing Prividium™
-- **User Panel** - User login for Prividium™
-- **Prividium API** - API services, including control and permissions and protected rpc.
-
-### Dependencies (`docker-compose-deps.yaml`)
-
-Supporting infrastructure services:
-
-- **PostgreSQL** - Database for prividium api and block explorer
-- **Keycloak** - Identity provider for OIDC authentication
-- **zkSync OS** - Layer 2 sequencer
-- **L1 (Anvil)** - Local Ethereum execution layer used as the settlement layer for this sandbox
-- **Block Explorer** - Transaction explorer
-- **Prometheus** - Metrics collection
-- **Grafana** - Metrics visualization
+- Admin Panel: **http://localhost:3000**
+- Block Explorer: **http://localhost:3010**. Your user needs a linked wallet to sign in.
 
 ---
 
@@ -154,15 +130,81 @@ Supporting infrastructure services:
 
 ---
 
-## Requesting Additional Funds
+## Funding Test Accounts
 
-As everything is running locally, there are rich accounts on the L2.
-
-You can use the following to "add assets" directly to any other account for testing:
+The local L2 has pre-funded accounts. To send 1 ETH to any address, run `cast` inside the stack's L1 container:
 
 ```bash
-cast send -r http://localhost:5050 <address-to-fund>  --value 1000000000000000000 --private-key 0x7726827caac94a7f9e1b160f7ea819f172f7b6f9d2a97f992c38edeab82d4110
+docker compose exec l1 cast send --rpc-url http://zksyncos:3050 <address-to-fund> --value 1ether \
+  --private-key 0x7726827caac94a7f9e1b160f7ea819f172f7b6f9d2a97f992c38edeab82d4110
 ```
+
+---
+
+## Stopping and Resetting
+
+```bash
+# Stop the cluster and keep its data
+docker compose down
+
+# Stop the cluster and delete all data
+docker compose down -v
+```
+
+After `down -v`, start again from [step 2](#2-start-the-cluster) and run the seed step again.
+
+---
+
+## Troubleshooting
+
+### `zksyncos` keeps restarting with `BlockOutOfRangeError`
+
+The log shows lines like these:
+
+```
+failed to init CommittedBatchProvider: failed to find live L1 commit block for batch 15
+BlockOutOfRangeError: block height is 796 but requested was 99
+```
+
+On startup, the sequencer reads old blocks from the local L1. To save disk, the local L1 keeps history for only its 512 most
+recent blocks, under two hours. Restarting the sequencer after the stack has run that long hits this. Run the reset
+below.
+
+### `l1` keeps restarting with `EOF while parsing`
+
+The log shows a line like this:
+
+```
+error: invalid value '/home/foundry/l1state/state.json' for '--state <PATH>': failed to parse json file: ... EOF while parsing
+```
+
+The L1 state file was cut short. This happens when Docker stops before the L1 finishes saving, for example when the
+machine sleeps or Docker Desktop quits. Run the reset below.
+
+### Reset
+
+The local chain is a disposable sandbox. A reset deletes all its data and starts a fresh chain:
+
+```bash
+docker compose down -v
+docker compose up -d
+```
+
+Then wait for the API and seed again ([steps 3 and 4](#3-wait-for-the-api)).
+
+### Webhook service logs `Unauthorized`
+
+The seed step has not run. Run [step 4](#4-seed-test-users-and-services).
+
+### `Bind for 0.0.0.0:<port> failed: port is already allocated`
+
+Another program uses one of the ports listed in [Prerequisites](#prerequisites). Stop it and run `docker compose up -d`
+again.
+
+### `unauthorized` or `denied` when pulling images
+
+Log in to the registry again ([step 1](#1-log-in-to-the-registry)). If it still fails, ask the Matter Labs team to
+check your registry access.
 
 ---
 
@@ -171,8 +213,8 @@ cast send -r http://localhost:5050 <address-to-fund>  --value 100000000000000000
 To see which image versions are available (useful for updating `docker-compose.yaml`):
 
 ```bash
-# Install skopeo if needed, then login
-skopeo login --username $DOCKER_USERNAME --password $DOCKER_PASSWORD quay.io
+# Install skopeo if needed, then log in
+skopeo login --username "$DOCKER_USERNAME" quay.io
 
 # List available tags for a service
 skopeo list-tags docker://quay.io/matterlabs_enterprise/prividium-user-panel
@@ -180,12 +222,21 @@ skopeo list-tags docker://quay.io/matterlabs_enterprise/prividium-user-panel
 
 ---
 
-## Stopping the Cluster
+## Architecture
 
-```bash
-# Stop services
-docker compose -f docker-compose.yaml down
+### Core Services (`docker-compose.yaml`)
 
-# To remove all data volumes as well
-docker compose -f docker-compose.yaml down -v
-```
+- **Admin Panel**: administrative interface for managing Prividium™
+- **User Panel**: user login for Prividium™
+- **Prividium API**: API services, including permissions and the protected RPC
+
+### Dependencies (`docker-compose-deps.yaml`)
+
+- **PostgreSQL**: database for the Prividium API and the block explorer
+- **Keycloak**: identity provider for OIDC authentication
+- **zkSync OS**: Layer 2 sequencer
+- **L1 (Anvil)**: local Ethereum execution layer, used as the settlement layer for this sandbox
+- **Block Explorer**: transaction explorer
+- **Webhook Service**: delivers webhooks for on-chain activity
+- **Prometheus**: metrics collection
+- **Grafana**: metrics visualization
