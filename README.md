@@ -14,23 +14,25 @@ A Docker Compose setup for running a complete Prividium™ cluster locally.
 - These host ports free: `3000`, `3001`, `3002`, `3010`, `3100`, `5010`, `5050`, `5080`, `5432`, `8000`, `8080`, `8081`, `9090`, `9091`.
 - Registry credentials for `quay.io`, provided by the Matter Labs team.
 
-The Prividium images are built for `linux/amd64`. On Apple Silicon, Docker Desktop runs them under emulation. Turn on
-**Use Rosetta for x86_64/amd64 emulation** in Docker Desktop settings for the best speed.
-
 ## Getting Started
+
+> [!WARNING]
+> Request access to our private docker registry before continuing with these instructions.
 
 Run every command from the root of this repository.
 
-### 1. Log in to the registry
+### 1. Authenticate with Docker Registry
 
-Use the username and password provided by the Matter Labs team:
+Authenticate with the information provided by the MatterLabs team:
 
 ```bash
 DOCKER_USERNAME=matterlabs_enterprise+your_username
 echo 'password_provided_by_matterlabs' | docker login quay.io -u "$DOCKER_USERNAME" --password-stdin
 ```
 
-### 2. Start the cluster
+### 2. Start the Cluster
+
+Start dependencies and core services:
 
 ```bash
 docker compose up -d
@@ -46,7 +48,7 @@ until curl -sf http://localhost:8000/health > /dev/null; do echo "Waiting for th
 
 The API runs its database migrations on startup. The next step needs them.
 
-### 4. Seed test users and services
+### 4. Seed Users and Services
 
 ```bash
 cat dev/wallet-auth/seed-wallet-auth.sql dev/service-auth/seed-webhook-service.sql \
@@ -56,9 +58,11 @@ cat dev/wallet-auth/seed-wallet-auth.sql dev/service-auth/seed-webhook-service.s
 This adds the wallet-based test users and the account the webhook service uses to read the chain. It is safe to run
 again.
 
-### 5. Open the User Panel
+### 5. Access the Application
 
-Open **http://localhost:3001** and click **Sign in with Keycloak**. Use one of these test users:
+Open the User Panel at **http://localhost:3001**
+
+Click **"Sign in with Keycloak"** and use one of the pre-configured test users:
 
 | Email           | Password |
 |-----------------|----------|
@@ -66,7 +70,7 @@ Open **http://localhost:3001** and click **Sign in with Keycloak**. Use one of t
 | user1@local.dev | password |
 | user2@local.dev | password |
 
-You can also click **Sign in with Wallet** and use MetaMask with one of these test wallets:
+Alternatively, you can login via a MetaMask wallet by clicking **"Sign in with Wallet"**:
 
 | Wallet Address                           | Private Key                                                        |
 |------------------------------------------|--------------------------------------------------------------------|
@@ -74,7 +78,7 @@ You can also click **Sign in with Wallet** and use MetaMask with one of these te
 | 70997970C51812dc3A010C7d01b50e0d17dc79C8 | 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d |
 | 3C44CdDdB6a900fa2b585dd299e03d12FA4293BC | 0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a |
 
-These wallets come from the standard test mnemonic:
+These wallet-based test users all have wallet addresses derived from the standard test mnemonic:
 
 ```
 test test test test test test test test test test test junk
@@ -82,10 +86,36 @@ test test test test test test test test test test test junk
 
 The first wallet (`f39F…2266`) is an admin.
 
-### 6. Open the other applications
+### 6. Access Other Applications
 
-- Admin Panel: **http://localhost:3000**
-- Block Explorer: **http://localhost:3010**. Your user needs a linked wallet to sign in.
+Login to the Admin Panel at **http://localhost:3000**
+
+Login to the Block Explorer at **http://localhost:3010** (Be sure a wallet is associated with the user's account)
+
+---
+
+## Architecture
+
+### Core Services (`docker-compose.yaml`)
+
+The main Prividium™ application services:
+
+- **Admin Panel** - Administrative interface for managing Prividium™
+- **User Panel** - User login for Prividium™
+- **Prividium API** - API services, including control and permissions and protected rpc.
+
+### Dependencies (`docker-compose-deps.yaml`)
+
+Supporting infrastructure services:
+
+- **PostgreSQL** - Database for prividium api and block explorer
+- **Keycloak** - Identity provider for OIDC authentication
+- **zkSync OS** - Layer 2 sequencer
+- **L1 (Anvil)** - Local Ethereum execution layer used as the settlement layer for this sandbox
+- **Block Explorer** - Transaction explorer
+- **Webhook Service** - Delivers webhooks for on-chain activity
+- **Prometheus** - Metrics collection
+- **Grafana** - Metrics visualization
 
 ---
 
@@ -130,9 +160,12 @@ The first wallet (`f39F…2266`) is an admin.
 
 ---
 
-## Funding Test Accounts
+## Requesting Additional Funds
 
-The local L2 has pre-funded accounts. To send 1 ETH to any address, run `cast` inside the stack's L1 container:
+As everything is running locally, there are rich accounts on the L2.
+
+You can use the following to "add assets" directly to any other account for testing. It runs `cast` inside the stack's L1
+container:
 
 ```bash
 docker compose exec l1 cast send --rpc-url http://zksyncos:3050 <address-to-fund> --value 1ether \
@@ -141,13 +174,27 @@ docker compose exec l1 cast send --rpc-url http://zksyncos:3050 <address-to-fund
 
 ---
 
-## Stopping and Resetting
+## Viewing Available Versions
+
+To see which image versions are available (useful for updating `docker-compose.yaml`):
 
 ```bash
-# Stop the cluster and keep its data
+# Install skopeo if needed, then log in
+skopeo login --username "$DOCKER_USERNAME" quay.io
+
+# List available tags for a service
+skopeo list-tags docker://quay.io/matterlabs_enterprise/prividium-user-panel
+```
+
+---
+
+## Stopping the Cluster
+
+```bash
+# Stop services
 docker compose down
 
-# Stop the cluster and delete all data
+# To remove all data volumes as well
 docker compose down -v
 ```
 
@@ -192,9 +239,14 @@ docker compose up -d
 
 Then wait for the API and seed again ([steps 3 and 4](#3-wait-for-the-api)).
 
+### Slow startup on Apple Silicon
+
+The Prividium images are built for `linux/amd64`, so Docker Desktop runs them under emulation. Turn on **Use Rosetta for
+x86_64/amd64 emulation** in Docker Desktop settings for the best speed.
+
 ### Webhook service logs `Unauthorized`
 
-The seed step has not run. Run [step 4](#4-seed-test-users-and-services).
+The seed step has not run. Run [step 4](#4-seed-users-and-services).
 
 ### `Bind for 0.0.0.0:<port> failed: port is already allocated`
 
@@ -203,40 +255,5 @@ again.
 
 ### `unauthorized` or `denied` when pulling images
 
-Log in to the registry again ([step 1](#1-log-in-to-the-registry)). If it still fails, ask the Matter Labs team to
+Log in to the registry again ([step 1](#1-authenticate-with-docker-registry)). If it still fails, ask the Matter Labs team to
 check your registry access.
-
----
-
-## Viewing Available Versions
-
-To see which image versions are available (useful for updating `docker-compose.yaml`):
-
-```bash
-# Install skopeo if needed, then log in
-skopeo login --username "$DOCKER_USERNAME" quay.io
-
-# List available tags for a service
-skopeo list-tags docker://quay.io/matterlabs_enterprise/prividium-user-panel
-```
-
----
-
-## Architecture
-
-### Core Services (`docker-compose.yaml`)
-
-- **Admin Panel**: administrative interface for managing Prividium™
-- **User Panel**: user login for Prividium™
-- **Prividium API**: API services, including permissions and the protected RPC
-
-### Dependencies (`docker-compose-deps.yaml`)
-
-- **PostgreSQL**: database for the Prividium API and the block explorer
-- **Keycloak**: identity provider for OIDC authentication
-- **zkSync OS**: Layer 2 sequencer
-- **L1 (Anvil)**: local Ethereum execution layer, used as the settlement layer for this sandbox
-- **Block Explorer**: transaction explorer
-- **Webhook Service**: delivers webhooks for on-chain activity
-- **Prometheus**: metrics collection
-- **Grafana**: metrics visualization
