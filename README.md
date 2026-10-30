@@ -202,6 +202,43 @@ After `down -v`, start again from [step 2](#2-start-the-cluster) and run the see
 
 ---
 
+## Running for Longer Sessions
+
+By default, the local L1 keeps under two hours of history. A stack that has run longer than that cannot restart
+without a [reset](#reset). For longer sessions, run the stack with the Geth L1 instead. It keeps the full history, so you
+can stop and restart the stack at any time.
+
+This needs Docker Compose 2.24.4 or later.
+
+Set the Compose files once in your terminal. Every `docker compose` command in this README then uses the Geth L1:
+
+```bash
+export COMPOSE_FILE=docker-compose.yaml:docker-compose-geth.yaml
+```
+
+Switch an existing stack with a reset, then start it:
+
+```bash
+docker compose down -v
+docker compose up -d
+```
+
+Then wait for the API and seed again ([steps 3 and 4](#3-wait-for-the-api)). The first start also deploys the contracts
+on the local L1, which adds about a minute.
+
+Keep `COMPOSE_FILE` set while you use this stack. Add the `export` line to your shell profile, or run it again in each
+new terminal. Running `docker compose up` without it switches the stack back to the default L1, which then needs a
+reset.
+
+The Geth L1 has no `cast`. To fund accounts, install [Foundry](https://getfoundry.sh) and run `cast` on your machine:
+
+```bash
+cast send --rpc-url http://localhost:5050 <address-to-fund> --value 1ether \
+  --private-key 0x7726827caac94a7f9e1b160f7ea819f172f7b6f9d2a97f992c38edeab82d4110
+```
+
+---
+
 ## Troubleshooting
 
 ### `zksyncos` keeps restarting with `BlockOutOfRangeError`
@@ -215,7 +252,7 @@ BlockOutOfRangeError: block height is 796 but requested was 99
 
 On startup, the sequencer reads old blocks from the local L1. To save disk, the local L1 keeps history for only its 512 most
 recent blocks, under two hours. Restarting the sequencer after the stack has run that long hits this. Run the reset
-below.
+below. To avoid it, see [Running for Longer Sessions](#running-for-longer-sessions).
 
 ### `l1` keeps restarting with `EOF while parsing`
 
@@ -226,7 +263,8 @@ error: invalid value '/home/foundry/l1state/state.json' for '--state <PATH>': fa
 ```
 
 The L1 state file was cut short. This happens when Docker stops before the L1 finishes saving, for example when the
-machine sleeps or Docker Desktop quits. Run the reset below.
+machine sleeps or Docker Desktop quits. Run the reset below. The Geth L1 in
+[Running for Longer Sessions](#running-for-longer-sessions) does not have this problem.
 
 ### Reset
 
