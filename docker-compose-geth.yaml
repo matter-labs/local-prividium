@@ -1,0 +1,63 @@
+# Optional override: swaps the `l1` service for an archive Geth in dev mode (same name/port/alias). Layer it in:
+#   docker compose -f docker-compose-deps.yaml -f docker-compose-geth.yaml up            # deps
+#   docker compose -f docker-compose.yaml -f docker-compose-e2e.yaml -f docker-compose-geth.yaml up  # e2e
+# Switching an existing stack between L1s, or changing the L1 dump, needs `down -v`: the sequencer DB holds the old chain.
+services:
+  geth-genesis:
+    image: node:22-slim
+    volumes:
+      - ./dev/zksyncos/l1-state.json.gz:/input/l1-state.json.gz:ro
+      - ./dev/zksyncos/geth/geth-dev-genesis.json:/input/geth-dev-genesis.json:ro
+      - ./dev/zksyncos/geth/generate-geth-genesis.mjs:/app/generate-geth-genesis.mjs:ro
+      - geth_config:/geth-config
+    command: >
+      node /app/generate-geth-genesis.mjs /input/l1-state.json.gz /input/geth-dev-genesis.json
+      /geth-config/genesis.json
+
+  # Replays the L1 deployment, writes the replay-done marker, then stays up (health-checked on the
+  # marker) so `up --wait` treats it as ready. Idempotent.
+  geth-deploy:
+    image: node:22-slim
+    restart: unless-stopped
+    volumes:
+      - ./dev/zksyncos/l1-state.json.gz:/input/l1-state.json.gz:ro
+      - ./dev/zksyncos/besu/replay-l1-deployment.mjs:/app/replay-l1-deployment.mjs:ro
+      - geth_config:/geth-config
+    command: >
+      bash -c "if [ ! -f /geth-config/replay-done ]; then
+      node /app/replay-l1-deployment.mjs /input/l1-state.json.gz http://l1:5010 &&
+      touch /geth-config/replay-done; fi && exec sleep infinity"
+    healthcheck:
+      test: ['CMD-SHELL', 'test -f /geth-config/replay-done']
+      interval: 5s
+      timeout: 5s
+      retries: 90
+      start_period: 15s
+    depends_on:
+      l1:
+        condition: service_started
+
+  l1:
+    image: ethereum/client-go:v1.17.8
+    restart: unless-stopped
+    entrypoint: ''
+    command: sh /geth/entrypoint.sh
+    stop_grace_period: 60s
+    volumes: !override
+      - geth_config:/geth-config
+      - geth_data:/data
+      - ./dev/zksyncos/geth/entrypoint.sh:/geth/entrypoint.sh:ro
+    depends_on:
+      geth-genesis:
+        condition: service_completed_successfully
+    healthcheck:
+      # Healthy once the 12 s-block node is up, so `depends_on: l1 healthy` waits for replay and the switch.
+      test: ['CMD-SHELL', 'nc -z 127.0.0.1 5010 && test -f /data/l1-ready']
+      interval: 5s
+      timeout: 5s
+      retries: 90
+      start_period: 30s
+
+volumes:
+  geth_config:
+  geth_data:
