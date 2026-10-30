@@ -4,15 +4,16 @@ A Docker Compose setup for running a complete Prividium™ cluster locally.
 
 > [!CAUTION]
 > This repository is for local development only.
-> The stack uses localhost-only URLs, seeded test users, test wallets, fixed development keys, and local infrastructure such as Anvil and a local zkSync OS instance.
+> The stack uses localhost-only URLs, seeded test users, test wallets, fixed development keys, and local infrastructure such as a local Ethereum node and a local zkSync OS instance.
 > Do not reuse these Docker Compose files, credentials, keys, or defaults against any shared or public network.
 
 ## Prerequisites
 
-- Docker with Docker Compose 2.24 or later (Docker Desktop or Docker Engine).
+- Docker with Docker Compose 2.24.4 or later (Docker Desktop or Docker Engine).
 - At least 4 GB of memory and 15 GB of free disk for Docker. The images take about 10 GB.
 - These host ports free: `3000`, `3001`, `3002`, `3010`, `3100`, `5010`, `5050`, `5080`, `5432`, `8000`, `8080`, `8081`, `9090`, `9091`.
 - Registry credentials for `quay.io`, provided by the Matter Labs team.
+- Optional: [Foundry](https://getfoundry.sh) for `cast`, to fund test accounts.
 
 ## Getting Started
 
@@ -38,7 +39,8 @@ Start dependencies and core services:
 docker compose up -d
 ```
 
-The first start pulls all images and takes a few minutes.
+The first start pulls all images and deploys the contracts on the local L1. It takes a few minutes. Later starts reuse
+both.
 
 ### 3. Wait for the API
 
@@ -111,7 +113,8 @@ Supporting infrastructure services:
 - **PostgreSQL** - Database for prividium api and block explorer
 - **Keycloak** - Identity provider for OIDC authentication
 - **zkSync OS** - Layer 2 sequencer
-- **L1 (Anvil)** - Local Ethereum execution layer used as the settlement layer for this sandbox
+- **L1 (Geth)** - Local Ethereum node used as the settlement layer for this sandbox. It keeps the full chain history,
+  so the stack can be stopped and restarted at any time.
 - **Block Explorer** - Transaction explorer
 - **Webhook Service** - Delivers webhooks for on-chain activity
 - **Prometheus** - Metrics collection
@@ -141,7 +144,7 @@ Supporting infrastructure services:
 | Service        | URL                   |
 |----------------|-----------------------|
 | zkSync OS RPC  | http://localhost:5050 |
-| L1 (Anvil) RPC | http://localhost:5010 |
+| L1 (Geth) RPC  | http://localhost:5010 |
 
 ### Infrastructure
 
@@ -164,11 +167,11 @@ Supporting infrastructure services:
 
 As everything is running locally, there are rich accounts on the L2.
 
-You can use the following to "add assets" directly to any other account for testing. It runs `cast` inside the stack's L1
-container:
+You can use the following to "add assets" directly to any other account for testing. It needs
+[Foundry](https://getfoundry.sh) installed:
 
 ```bash
-docker compose exec l1 cast send --rpc-url http://zksyncos:3050 <address-to-fund> --value 1ether \
+cast send --rpc-url http://localhost:5050 <address-to-fund> --value 1ether \
   --private-key 0x7726827caac94a7f9e1b160f7ea819f172f7b6f9d2a97f992c38edeab82d4110
 ```
 
@@ -204,29 +207,9 @@ After `down -v`, start again from [step 2](#2-start-the-cluster) and run the see
 
 ## Troubleshooting
 
-### `zksyncos` keeps restarting with `BlockOutOfRangeError`
+### `zksyncos` keeps restarting after an update
 
-The log shows lines like these:
-
-```
-failed to init CommittedBatchProvider: failed to find live L1 commit block for batch 15
-BlockOutOfRangeError: block height is 796 but requested was 99
-```
-
-On startup, the sequencer reads old blocks from the local L1. To save disk, the local L1 keeps history for only its 512 most
-recent blocks, under two hours. Restarting the sequencer after the stack has run that long hits this. Run the reset
-below.
-
-### `l1` keeps restarting with `EOF while parsing`
-
-The log shows a line like this:
-
-```
-error: invalid value '/home/foundry/l1state/state.json' for '--state <PATH>': failed to parse json file: ... EOF while parsing
-```
-
-The L1 state file was cut short. This happens when Docker stops before the L1 finishes saving, for example when the
-machine sleeps or Docker Desktop quits. Run the reset below.
+The local chain data comes from an earlier version of this repository. Run the reset below.
 
 ### Reset
 
