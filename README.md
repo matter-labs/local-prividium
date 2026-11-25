@@ -117,6 +117,26 @@ Supporting infrastructure services:
 - **Prometheus** - Metrics collection
 - **Grafana** - Metrics visualization
 
+### What the Local Chain Publishes to L1
+
+The local chain is configured like a live Prividium chain: a validium that publishes only L2→L1 logs to L1. Each batch
+posts a commitment, a proof and a blob with those logs. Contract code, contract state and L2 transactions stay off L1.
+
+Some data is public on L1 by design:
+
+- Deposits and other L1→L2 transactions, including their calldata
+- L2→L1 messages, such as withdrawals, once they are finalized on L1
+
+To check the setting, read it from the chain's L1 contract. `1` means logs only:
+
+```bash
+DIAMOND=$(cast call --rpc-url http://localhost:5010 0x24420e672f8711a040e8ab27ac33026d277a7e2d 'getZKChain(uint256)(address)' 506)
+cast call --rpc-url http://localhost:5010 "$DIAMOND" 'getPubdataContent()(uint8)'
+```
+
+`zksyncos` refuses to start if this value differs from `l1_sender.expected_pubdata_content` in
+`dev/zksyncos/config.yaml`.
+
 ---
 
 ## Available URLs
