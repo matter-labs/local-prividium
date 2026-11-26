@@ -6,9 +6,10 @@ services:
     image: node:22-slim
     volumes:
       - ./dev/zksyncos/l1-state.json.gz:/input/l1-state.json.gz:ro
-      - ./dev/zksyncos/besu/generate-besu-genesis.mjs:/app/generate-besu-genesis.mjs:ro
+      - ./dev/zksyncos/besu/generate-besu-genesis.mjs:/app/besu/generate-besu-genesis.mjs:ro
+      - ./dev/zksyncos/l1-genesis-alloc.mjs:/app/l1-genesis-alloc.mjs:ro
       - besu_config:/besu-config
-    command: node /app/generate-besu-genesis.mjs /input/l1-state.json.gz /besu-config/besu-network-config.json
+    command: node /app/besu/generate-besu-genesis.mjs /input/l1-state.json.gz /besu-config/besu-network-config.json
 
   # Replays the L1 deployment, writes the replay-done marker, then stays up (health-checked on the
   # marker) so `up --wait` treats it as ready. Idempotent.
@@ -17,7 +18,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./dev/zksyncos/l1-state.json.gz:/input/l1-state.json.gz:ro
-      - ./dev/zksyncos/besu/replay-l1-deployment.mjs:/app/replay-l1-deployment.mjs:ro
+      - ./dev/zksyncos/replay-l1-deployment.mjs:/app/replay-l1-deployment.mjs:ro
       - besu_config:/besu-config
     command: >
       bash -c "if [ ! -f /besu-config/replay-done ]; then
