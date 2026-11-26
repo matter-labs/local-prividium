@@ -117,6 +117,29 @@ Supporting infrastructure services:
 - **Prometheus** - Metrics collection
 - **Grafana** - Metrics visualization
 
+### What the Local Chain Publishes to L1
+
+The local chain is configured like a live Prividium chain: a validium that publishes only L2→L1 logs to L1. Each batch
+posts a commitment, a proof and a blob with those logs. Contract code, contract state and L2 transactions stay off L1.
+
+Some data is public on L1 by design:
+
+- Deposits and other L1→L2 transactions, including their calldata
+- L2→L1 messages, such as withdrawals, once they are finalized on L1
+
+To check the setting, read it from the chain's L1 contract. `1` means logs only. The commands run `cast` inside the
+stack's L1:
+
+```bash
+DIAMOND=$(docker compose exec -T l1 cast call --rpc-url http://localhost:5010 0x24420e672f8711a040e8ab27ac33026d277a7e2d 'getZKChain(uint256)(address)' 506)
+docker compose exec -T l1 cast call --rpc-url http://localhost:5010 "$DIAMOND" 'getPubdataContent()(uint8)'
+```
+
+With the Geth or Besu L1, run the same two `cast` commands on your machine, without `docker compose exec -T l1`. This needs [Foundry](https://getfoundry.sh).
+
+`zksyncos` refuses to start if this value differs from `l1_sender.expected_pubdata_content` in
+`dev/zksyncos/config.yaml`.
+
 ---
 
 ## Available URLs
@@ -265,6 +288,17 @@ error: invalid value '/home/foundry/l1state/state.json' for '--state <PATH>': fa
 The L1 state file was cut short. This happens when Docker stops before the L1 finishes saving, for example when the
 machine sleeps or Docker Desktop quits. Run the reset below. The Geth L1 in
 [Running for Longer Sessions](#running-for-longer-sessions) does not have this problem.
+
+### `zksyncos` keeps restarting with `does not match L1 pubdata content`
+
+The log shows a line like this:
+
+```
+l1_sender.expected_pubdata_content=LogsOnly does not match L1 pubdata content FullPubdata
+```
+
+The L1 data in your volumes comes from an older version of this repository, where the local chain published full
+pubdata. Run the reset below.
 
 ### Reset
 
