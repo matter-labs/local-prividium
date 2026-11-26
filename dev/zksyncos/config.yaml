@@ -9,6 +9,7 @@ l1_sender:
   operator_prove_sk: '0x1ed8abac5f8143e0f37cc4da4655cb14c82473c1254da12683956749b0cca5bd'
   operator_execute_sk: '0x7a2f70531f7ba8a79e74c2be455eb7dfa0526f2e802ab9d7132959f040acafc5'
   poll_interval: 100ms
+  expected_pubdata_content: LogsOnly
 l1_watcher:
   poll_interval: 100ms
   finalized_poll_interval: 100ms
