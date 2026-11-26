@@ -135,6 +135,8 @@ DIAMOND=$(docker compose exec -T l1 cast call --rpc-url http://localhost:5010 0x
 docker compose exec -T l1 cast call --rpc-url http://localhost:5010 "$DIAMOND" 'getPubdataContent()(uint8)'
 ```
 
+With the Geth or Besu L1, run the same two `cast` commands on your machine, without `docker compose exec -T l1`. This needs [Foundry](https://getfoundry.sh).
+
 `zksyncos` refuses to start if this value differs from `l1_sender.expected_pubdata_content` in
 `dev/zksyncos/config.yaml`.
 
