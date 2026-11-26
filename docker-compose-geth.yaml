@@ -8,10 +8,11 @@ services:
     volumes:
       - ./dev/zksyncos/l1-state.json.gz:/input/l1-state.json.gz:ro
       - ./dev/zksyncos/geth/geth-dev-genesis.json:/input/geth-dev-genesis.json:ro
-      - ./dev/zksyncos/geth/generate-geth-genesis.mjs:/app/generate-geth-genesis.mjs:ro
+      - ./dev/zksyncos/geth/generate-geth-genesis.mjs:/app/geth/generate-geth-genesis.mjs:ro
+      - ./dev/zksyncos/l1-genesis-alloc.mjs:/app/l1-genesis-alloc.mjs:ro
       - geth_config:/geth-config
     command: >
-      node /app/generate-geth-genesis.mjs /input/l1-state.json.gz /input/geth-dev-genesis.json
+      node /app/geth/generate-geth-genesis.mjs /input/l1-state.json.gz /input/geth-dev-genesis.json
       /geth-config/genesis.json
 
   # Replays the L1 deployment, writes the replay-done marker, then stays up (health-checked on the
@@ -21,7 +22,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./dev/zksyncos/l1-state.json.gz:/input/l1-state.json.gz:ro
-      - ./dev/zksyncos/besu/replay-l1-deployment.mjs:/app/replay-l1-deployment.mjs:ro
+      - ./dev/zksyncos/replay-l1-deployment.mjs:/app/replay-l1-deployment.mjs:ro
       - geth_config:/geth-config
     command: >
       bash -c "if [ ! -f /geth-config/replay-done ]; then

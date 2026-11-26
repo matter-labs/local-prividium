@@ -1,4 +1,4 @@
-// Replays the recorded L1 deployment txs onto Besu, regenerating the contracts + event logs.
+// Replays the recorded L1 deployment txs onto a fresh L1 node (Besu or Reth), regenerating the contracts + event logs.
 // Pure Node built-ins: RLP re-serialization of the already-signed txs + fetch.
 // Usage: node replay-l1-deployment.mjs <l1-state.json.gz> <rpc-url>
 
@@ -43,6 +43,18 @@ function bytes(hex) {
 }
 function accessListRlp(list) {
     return (list || []).map((e) => [bytes(e.address), (e.storageKeys || []).map(bytes)]);
+}
+
+// Older anvil dumps nest each tx under its type name ({ Legacy: {...} }) and store the bare yParity as v.
+function normalize(tx) {
+    if (tx.type) return tx;
+    const [[kind, body]] = Object.entries(tx);
+    if (kind === 'Legacy') {
+        const v = BigInt(body.chainId) * 2n + 35n + BigInt(body.yParity);
+        return { ...body, type: '0x0', v: `0x${v.toString(16)}` };
+    }
+    if (kind === 'EIP1559') return { ...body, type: '0x2' };
+    throw new Error(`unsupported tx type: ${kind}`);
 }
 
 function serialize(tx) {
@@ -118,7 +130,7 @@ async function main() {
 
     const blocks = [...dump.blocks].sort((a, b) => parseInt(a.header.number, 16) - parseInt(b.header.number, 16));
     const ordered = [];
-    for (const b of blocks) for (const tx of b.transactions || []) ordered.push(tx.transaction);
+    for (const b of blocks) for (const tx of b.transactions || []) ordered.push(normalize(tx.transaction));
     console.log(`Replaying ${ordered.length} recorded L1 txs to ${rpcUrl}`);
 
     for (let i = 0; i < ordered.length; i++) {
