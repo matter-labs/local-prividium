@@ -62,7 +62,7 @@ services:
       --preserve-historical-states --max-persisted-states 512 --block-time 12 --mixed-mining --slots-in-an-epoch 10
 
   zksyncos:
-    image: quay.io/matterlabs_enterprise/zksync-os-server:v0.24.7
+    image: quay.io/matterlabs_enterprise/zksync-os-server:v0.24.9
     restart: unless-stopped
     platform: linux/amd64
     ports:
